@@ -30,7 +30,7 @@ export async function registerUser(input: unknown): Promise<ActionResult<Profile
       userId: user.$id,
       full_name: values.full_name,
       email: values.email,
-      role: "admin",
+      role: "client",
       department: values.department || "",
       avatar_url: "",
       created_at: new Date().toISOString()
@@ -39,7 +39,7 @@ export async function registerUser(input: unknown): Promise<ActionResult<Profile
     await persistSession({
       secret: session.secret,
       userId: user.$id,
-      role: "admin",
+      role: "client",
       email: values.email,
       name: values.full_name
     });
