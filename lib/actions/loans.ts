@@ -6,17 +6,12 @@ import { Query } from "node-appwrite";
 import { InputFile } from "node-appwrite/file";
 import { getLoggedInUser } from "@/lib/appwrite/session";
 import { loanDecisionSchema, loanRequestSchema, requestReturnSchema, returnLoanSchema } from "@/lib/validators/loans";
-import { mockLoans, mockItems } from "@/lib/utils/mock-data";
 import type { ActionResult, LoanStatus, Loan } from "@/types";
 
 export async function uploadReturnImage(formData: FormData): Promise<ActionResult<string>> {
   try {
     const file = formData.get("file") as File;
     if (!file) return { success: false, error: "Tidak ada file yang diunggah." };
-
-    if (!hasAppwriteConfig()) {
-      return { success: true, data: "mock-id-" + Date.now() };
-    }
 
     const { storage } = createAdminClient();
     
@@ -67,20 +62,6 @@ export async function createLoanRequest(input: unknown): Promise<ActionResult> {
       return { success: false, error: "Sesi pengguna tidak ditemukan." };
     }
 
-    if (!hasAppwriteConfig()) {
-      const newLoan: Loan = {
-        $id: "mock-loan-" + Date.now(),
-        ...values,
-        borrower_id: user.profile.userId,
-        status: "pending",
-        created_at: new Date().toISOString(),
-        item: mockItems.find(i => i.$id === values.item_id),
-        borrower: user.profile
-      };
-      mockLoans.unshift(newLoan);
-      return { success: true, data: newLoan };
-    }
-
     const { databases } = createAdminClient();
     const loan = await databases.createDocument(appConfig.databaseId, appConfig.collections.loans, ID.unique(), {
       ...values,
@@ -98,18 +79,6 @@ export async function createLoanRequest(input: unknown): Promise<ActionResult> {
 export async function approveLoan(input: unknown): Promise<ActionResult> {
   try {
     const values = loanDecisionSchema.parse(input);
-
-    if (!hasAppwriteConfig()) {
-      const loan = mockLoans.find(l => l.$id === values.loanId);
-      if (loan) {
-        loan.status = "approved";
-        if (values.admin_note) loan.admin_note = values.admin_note;
-        if (values.admin_image_id) loan.admin_image_id = values.admin_image_id;
-        const item = mockItems.find(i => i.$id === loan.item_id);
-        if (item) item.quantity_available -= loan.quantity;
-      }
-      return { success: true, data: values };
-    }
 
     const { databases } = createAdminClient();
     const loan = await databases.getDocument(appConfig.databaseId, appConfig.collections.loans, values.loanId);
@@ -135,16 +104,6 @@ export async function rejectLoan(input: unknown): Promise<ActionResult> {
   try {
     const values = loanDecisionSchema.parse(input);
 
-    if (!hasAppwriteConfig()) {
-      const loan = mockLoans.find(l => l.$id === values.loanId);
-      if (loan) {
-        loan.status = "rejected";
-        if (values.admin_note) loan.admin_note = values.admin_note;
-        if (values.admin_image_id) loan.admin_image_id = values.admin_image_id;
-      }
-      return { success: true, data: values };
-    }
-
     const updatedLoan = await updateLoanStatus(values.loanId, "rejected", values.admin_note, undefined, values.admin_image_id);
     return { success: true, data: updatedLoan };
   } catch (error) {
@@ -155,18 +114,6 @@ export async function rejectLoan(input: unknown): Promise<ActionResult> {
 export async function markLoanReturned(input: unknown): Promise<ActionResult> {
   try {
     const values = returnLoanSchema.parse(input);
-
-    if (!hasAppwriteConfig()) {
-      const loan = mockLoans.find(l => l.$id === values.loanId);
-      if (loan) {
-        loan.status = "returned";
-        if (values.admin_note) loan.admin_note = values.admin_note;
-        if (values.actual_return_date) loan.actual_return_date = values.actual_return_date;
-        const item = mockItems.find(i => i.$id === loan.item_id);
-        if (item) item.quantity_available += loan.quantity;
-      }
-      return { success: true, data: values };
-    }
 
     const { databases } = createAdminClient();
     const loan = await databases.getDocument(appConfig.databaseId, appConfig.collections.loans, values.loanId);
@@ -187,16 +134,6 @@ export async function requestReturn(input: unknown): Promise<ActionResult> {
   try {
     const values = requestReturnSchema.parse(input);
 
-    if (!hasAppwriteConfig()) {
-      const loan = mockLoans.find(l => l.$id === values.loanId);
-      if (loan) {
-        loan.status = "returning";
-        if (values.user_note) loan.user_note = values.user_note;
-        if (values.return_image_id) loan.return_image_id = values.return_image_id;
-      }
-      return { success: true, data: values };
-    }
-
     const updatedLoan = await updateLoanStatus(values.loanId, "returning", undefined, undefined, undefined, {
       return_image_id: values.return_image_id,
       user_note: values.user_note
@@ -210,12 +147,6 @@ export async function requestReturn(input: unknown): Promise<ActionResult> {
 
 export async function deleteLoan(loanId: string): Promise<ActionResult> {
   try {
-    if (!hasAppwriteConfig()) {
-      const index = mockLoans.findIndex(l => l.$id === loanId);
-      if (index !== -1) mockLoans.splice(index, 1);
-      return { success: true };
-    }
-
     const { databases } = createAdminClient();
     await databases.deleteDocument(appConfig.databaseId, appConfig.collections.loans, loanId);
 
@@ -227,11 +158,6 @@ export async function deleteLoan(loanId: string): Promise<ActionResult> {
 
 export async function deleteAllLoans(): Promise<ActionResult> {
   try {
-    if (!hasAppwriteConfig()) {
-      mockLoans.splice(0, mockLoans.length);
-      return { success: true };
-    }
-
     const { databases } = createAdminClient();
     
     let deletedCount = 0;

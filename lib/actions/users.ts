@@ -7,7 +7,6 @@ import { appConfig, hasAppwriteConfig } from "@/lib/appwrite/config";
 import { createAdminClient, ID } from "@/lib/appwrite/server";
 import { loginSchema, registerSchema } from "@/lib/validators/auth";
 import { activeUserSchema, roleUpdateSchema } from "@/lib/validators/users";
-import { mockProfiles } from "@/lib/utils/mock-data";
 import type { ActionResult, Profile, SessionCookie } from "@/types";
 
 async function persistSession(session: SessionCookie) {
@@ -22,29 +21,6 @@ async function persistSession(session: SessionCookie) {
 export async function registerUser(input: unknown): Promise<ActionResult<Profile>> {
   try {
     const values = registerSchema.parse(input);
-
-    if (!hasAppwriteConfig()) {
-      const mockProfile: Profile = {
-        userId: "mock-user-" + Date.now(),
-        full_name: values.full_name,
-        email: values.email,
-        role: "client", // default role for new registrations
-        department: values.department,
-        created_at: new Date().toISOString(),
-        is_active: true
-      };
-      mockProfiles.push(mockProfile);
-
-      await persistSession({
-        secret: "mock-session",
-        userId: mockProfile.userId,
-        role: mockProfile.role,
-        email: mockProfile.email,
-        name: mockProfile.full_name
-      });
-
-      return { success: true, data: mockProfile };
-    }
 
     const { account, databases } = createAdminClient();
     const user = await account.create(ID.unique(), values.email, values.password, values.full_name);
@@ -77,18 +53,6 @@ export async function registerUser(input: unknown): Promise<ActionResult<Profile
 export async function loginUser(input: unknown): Promise<ActionResult<Profile>> {
   try {
     const values = loginSchema.parse(input);
-
-    if (!hasAppwriteConfig()) {
-      const profile = mockProfiles.find((entry) => entry.email === values.email) ?? mockProfiles[1];
-      await persistSession({
-        secret: "mock-session",
-        userId: profile.userId,
-        role: profile.role,
-        email: profile.email,
-        name: profile.full_name
-      });
-      return { success: true, data: profile };
-    }
 
     const { account, databases } = createAdminClient();
     const session = await account.createEmailPasswordSession(values.email, values.password);
@@ -125,14 +89,6 @@ export async function updateUserRole(input: unknown): Promise<ActionResult> {
   try {
     const values = roleUpdateSchema.parse(input);
 
-    if (!hasAppwriteConfig()) {
-      const profile = mockProfiles.find((p) => p.userId === values.userId);
-      if (profile) {
-        profile.role = values.role as "admin" | "client";
-      }
-      return { success: true, data: values };
-    }
-
     const { databases } = createAdminClient();
     const response = await databases.listDocuments(appConfig.databaseId, appConfig.collections.profiles, [
       Query.equal("userId", values.userId),
@@ -157,14 +113,6 @@ export async function updateUserRole(input: unknown): Promise<ActionResult> {
 export async function setUserActive(input: unknown): Promise<ActionResult> {
   try {
     const values = activeUserSchema.parse(input);
-
-    if (!hasAppwriteConfig()) {
-      const profile = mockProfiles.find((p) => p.userId === values.userId);
-      if (profile) {
-        profile.is_active = values.isActive;
-      }
-      return { success: true, data: values };
-    }
 
     const { users } = createAdminClient();
     await users.updateStatus(values.userId, values.isActive);

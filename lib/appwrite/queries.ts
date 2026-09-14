@@ -1,13 +1,9 @@
 import { Query } from "node-appwrite";
 import { appConfig, hasAppwriteConfig, buildPreviewUrl } from "@/lib/appwrite/config";
 import { createAdminClient, createSessionClient } from "@/lib/appwrite/server";
-import { buildDashboardData, buildReportRows, mockItems, mockLoans, mockProfiles } from "@/lib/utils/mock-data";
 import type { HistoryFilters, Item, Loan, Profile, ReportRow } from "@/types";
 
 export async function getCatalogItems() {
-  if (!hasAppwriteConfig()) {
-    return mockItems;
-  }
 
   const { databases } = createAdminClient();
   const response = await databases.listDocuments(
@@ -23,10 +19,6 @@ export async function getCatalogItems() {
 }
 
 export async function getItemById(itemId: string) {
-  if (!hasAppwriteConfig()) {
-    const items = await getCatalogItems();
-    return items.find((item) => item.$id === itemId) ?? null;
-  }
 
   try {
     const { databases } = createAdminClient();
@@ -42,9 +34,6 @@ export async function getItemById(itemId: string) {
 }
 
 export async function getMyLoans(userId: string) {
-  if (!hasAppwriteConfig()) {
-    return mockLoans.filter((loan) => loan.borrower_id === userId);
-  }
 
   const { databases } = createAdminClient();
   const [loansResponse, items, profiles] = await Promise.all([
@@ -67,9 +56,6 @@ export async function getMyLoans(userId: string) {
 }
 
 export async function getProfiles() {
-  if (!hasAppwriteConfig()) {
-    return mockProfiles;
-  }
 
   const { databases } = createAdminClient();
   const response = await databases.listDocuments(
@@ -82,9 +68,6 @@ export async function getProfiles() {
 
 export async function getAdminDashboardData() {
   try {
-    if (!hasAppwriteConfig()) {
-      return buildDashboardData();
-    }
 
     const loans = await getAllLoans();
     const items = await getCatalogItems();
@@ -195,14 +178,19 @@ export async function getAdminDashboardData() {
     };
   } catch (error) {
     console.error("Dashboard data fetch failed:", error);
-    return buildDashboardData();
+    return {
+      stats: [],
+      recentLoans: [],
+      monthlyLoans: [],
+      statusDistribution: [],
+      returnTrend: [],
+      topBorrowers: [],
+      frequentLateReturns: []
+    };
   }
 }
 
 export async function getAllLoans() {
-  if (!hasAppwriteConfig()) {
-    return mockLoans;
-  }
 
   const { databases } = createAdminClient();
   const [loansResponse, items, profiles] = await Promise.all([
@@ -256,9 +244,6 @@ export async function getHistory(filters: HistoryFilters = {}) {
       });
       }
 export async function getReports(): Promise<ReportRow[]> {
-  if (!hasAppwriteConfig()) {
-    return buildReportRows();
-  }
 
   const loans = await getAllLoans();
   return loans.map((loan) => ({
@@ -279,12 +264,6 @@ export async function getActiveLoans() {
 }
 
 export async function getCurrentUserProfile(sessionSecret?: string, userId?: string) {
-  if (!hasAppwriteConfig()) {
-    if (userId) {
-      return mockProfiles.find((p) => p.userId === userId) ?? mockProfiles[1];
-    }
-    return mockProfiles[1];
-  }
 
   if (!sessionSecret || sessionSecret === "mock-session") {
     return null;
