@@ -70,10 +70,6 @@ ALTER TABLE loans ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public profiles are viewable by everyone." ON profiles FOR SELECT USING (true);
 CREATE POLICY "Users can insert their own profile." ON profiles FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
 CREATE POLICY "Users can update own profile." ON profiles FOR UPDATE USING ((select auth.uid()) = user_id);
--- Admins can do everything on profiles
-CREATE POLICY "Admins have full access to profiles" ON profiles FOR ALL USING (
-  (SELECT role FROM profiles WHERE user_id = auth.uid()) = 'admin'
-);
 
 -- Items Policies
 CREATE POLICY "Items are viewable by everyone." ON items FOR SELECT USING (true);

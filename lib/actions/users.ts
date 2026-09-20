@@ -12,23 +12,22 @@ export async function registerUser(input: unknown): Promise<ActionResult<Profile
   try {
     const values = registerSchema.parse(input);
 
-    const supabase = await createClient();
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const adminClient = await createAdminClient();
+    
+    // Gunakan Admin API untuk membuat user agar bisa langsung otomatis terverifikasi
+    // dan menghindari rate-limit bawaan dari halaman pendaftaran publik.
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
       email: values.email,
       password: values.password,
+      email_confirm: true, // Otomatis terkonfirmasi tanpa butuh email OTP
     });
 
     if (authError || !authData.user) {
-      return { success: false, error: authError?.message || "Registrasi gagal di level autentikasi." };
+      const errorMsg = authError?.message === "Email already exists" 
+        ? "Email sudah terdaftar. Silakan gunakan email lain atau login." 
+        : authError?.message || "Registrasi gagal di level autentikasi.";
+      return { success: false, error: errorMsg };
     }
-
-    // Supabase returns a fake user object if the email is already registered 
-    // to prevent email enumeration. We can detect this if identities is empty.
-    if (authData.user.identities && authData.user.identities.length === 0) {
-      return { success: false, error: "Email sudah terdaftar. Silakan gunakan email lain atau login." };
-    }
-
-    const adminClient = await createAdminClient();
     const profilePayload = {
       user_id: authData.user.id,
       full_name: values.full_name,
@@ -51,6 +50,15 @@ export async function registerUser(input: unknown): Promise<ActionResult<Profile
       // Rollback might be needed in a real app, but for now we return error
       return { success: false, error: profileError.message };
     }
+
+    // [MENGEMBALIKAN ALUR SEPERTI APPWRITE]
+    // Setelah akun dan profil terbuat via Admin, kita otomatis loginkan user tersebut
+    // agar mereka langsung punya sesi (session/cookies) dan tidak perlu login ulang.
+    const supabase = await createClient();
+    await supabase.auth.signInWithPassword({
+      email: values.email,
+      password: values.password,
+    });
 
     return { success: true, data: profileData as Profile };
   } catch (error) {
