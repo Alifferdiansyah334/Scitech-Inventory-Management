@@ -2,7 +2,7 @@
 
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
-import { buildPreviewUrl } from "@/lib/supabase/queries";
+import { buildPreviewUrl } from "@/lib/supabase/client";
 import type { Loan } from "@/types";
 
 function tone(status: Loan["status"]) {

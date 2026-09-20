@@ -1,15 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { buildPreviewUrl } from "@/lib/supabase/client";
 import type { HistoryFilters, Item, Loan, Profile, ReportRow } from "@/types";
-
-export function buildPreviewUrl(bucketId: string, filePath: string) {
-  if (!filePath) return "";
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseUrl) return "";
-  
-  // Note: if bucket is public, we can just return the public URL
-  return `${supabaseUrl}/storage/v1/object/public/${bucketId}/${filePath}`;
-}
 
 export async function getCatalogItems() {
   const supabase = await createClient();
