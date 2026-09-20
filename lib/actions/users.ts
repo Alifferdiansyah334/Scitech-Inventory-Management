@@ -22,6 +22,12 @@ export async function registerUser(input: unknown): Promise<ActionResult<Profile
       return { success: false, error: authError?.message || "Registrasi gagal di level autentikasi." };
     }
 
+    // Supabase returns a fake user object if the email is already registered 
+    // to prevent email enumeration. We can detect this if identities is empty.
+    if (authData.user.identities && authData.user.identities.length === 0) {
+      return { success: false, error: "Email sudah terdaftar. Silakan gunakan email lain atau login." };
+    }
+
     const adminClient = await createAdminClient();
     const profilePayload = {
       user_id: authData.user.id,
