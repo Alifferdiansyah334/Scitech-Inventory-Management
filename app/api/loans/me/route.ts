@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { getMyLoans } from "@/lib/appwrite/queries";
-import { getLoggedInUser } from "@/lib/appwrite/session";
+import { getMyLoans, getCurrentUserProfile } from "@/lib/supabase/queries";
 
 export async function GET() {
   try {
-    const user = await getLoggedInUser();
-    if (!user) {
+    const profile = await getCurrentUserProfile();
+    if (!profile) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const loans = await getMyLoans(user.profile.userId);
+    const loans = await getMyLoans(profile.user_id);
     return NextResponse.json(loans);
   } catch (error) {
     return NextResponse.json({ error: "Gagal mengambil data pinjaman" }, { status: 500 });

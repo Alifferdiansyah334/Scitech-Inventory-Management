@@ -18,7 +18,7 @@ export function RecentLoansTable({ loans }: { loans: Loan[] }) {
           </thead>
           <tbody className="divide-y divide-slate-200 text-nowrap">
             {loans.map((loan) => (
-              <tr key={loan.$id}>
+              <tr key={loan.id}>
                 <td className="px-4 py-4 text-sm text-slate-700">{loan.borrower?.full_name ?? loan.borrower_id}</td>
                 <td className="px-4 py-4 text-sm text-slate-700">{loan.item?.name ?? loan.item_id}</td>
                 <td className="px-4 py-4 text-sm"><Badge>{loan.status}</Badge></td>

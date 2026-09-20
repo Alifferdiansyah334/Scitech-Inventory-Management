@@ -95,7 +95,7 @@ export function CatalogView({ items: initialItems }: { items: any[] }) {
       {paginatedItems.length > 0 ? (
         <ListStagger className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {paginatedItems.map((item) => (
-            <ListStaggerItem key={item.$id}>
+            <ListStaggerItem key={item.id}>
               <ItemCard 
                 item={item} 
                 onClick={() => setSelectedItem(item)} 

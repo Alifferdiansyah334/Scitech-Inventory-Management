@@ -1,6 +1,6 @@
 import { HistoryFilters } from "@/components/admin/history-filters";
 import { HistoryTable } from "@/components/admin/history-table";
-import { getHistory, getCatalogItems, getProfiles } from "@/lib/appwrite/queries";
+import { getHistory, getCatalogItems, getProfiles } from "@/lib/supabase/queries";
 import { parseHistoryFilters } from "@/lib/utils/history-filters";
 import { Typewriter } from "@/components/ui/typewriter";
 

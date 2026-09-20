@@ -1,5 +1,5 @@
 import { ReportsView } from "@/components/admin/reports-view";
-import { getReports } from "@/lib/appwrite/queries";
+import { getReports } from "@/lib/supabase/queries";
 import { Typewriter } from "@/components/ui/typewriter";
 
 export const dynamic = "force-dynamic";

@@ -1,9 +1,6 @@
 "use server";
 
 import { sendOtpSchema, verifyOtpSchema, resetPasswordSchema } from "@/lib/validators/auth";
-import { appConfig, hasAppwriteConfig } from "@/lib/appwrite/config";
-import { createAdminClient, ID } from "@/lib/appwrite/server";
-import { Query } from "node-appwrite";
 import type { ActionResult } from "@/types";
 
 // In-Memory store for OTPs (with TTL 5 minutes)
@@ -196,9 +193,6 @@ export async function verifyBrevoOtp(input: unknown): Promise<ActionResult> {
   }
 }
 
-/**
- * Reset password using validated OTP
- */
 export async function resetPasswordWithOtp(input: unknown): Promise<ActionResult> {
   try {
     const values = resetPasswordSchema.parse(input);
@@ -210,16 +204,30 @@ export async function resetPasswordWithOtp(input: unknown): Promise<ActionResult
       return { success: false, error: "Sesi verifikasi OTP tidak valid atau kedaluwarsa." };
     }
 
-    if (hasAppwriteConfig()) {
-      const { users, databases } = createAdminClient();
-      // Find user by email in Appwrite
-      const userList = await users.list([Query.equal("email", email)]);
-      if (userList.users.length === 0) {
-        return { success: false, error: "Akun dengan email tersebut tidak ditemukan." };
-      }
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const adminClient = await createAdminClient();
+    
+    // Find user by email in Supabase Auth
+    // In Supabase, you can't search auth.users directly via the normal select unless you query it, 
+    // but the admin api has a way to list users or update by ID.
+    // Let's get the user id from profiles table which is synced.
+    const { data: profile } = await adminClient
+      .from("profiles")
+      .select("user_id")
+      .eq("email", email)
+      .single();
 
-      const targetUser = userList.users[0];
-      await users.updatePassword(targetUser.$id, values.newPassword);
+    if (!profile) {
+      return { success: false, error: "Akun dengan email tersebut tidak ditemukan." };
+    }
+
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(
+      profile.user_id,
+      { password: values.newPassword }
+    );
+    
+    if (updateError) {
+      return { success: false, error: updateError.message };
     }
 
     // Clear OTP after successful reset

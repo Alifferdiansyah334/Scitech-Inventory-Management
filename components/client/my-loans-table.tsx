@@ -45,9 +45,9 @@ export function MyLoansTable({ initialData, userId }: { initialData: Loan[]; use
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {paginatedData.map((loan, idx) => (
+            {paginatedData.map((loan: Loan, idx: number) => (
               <motion.tr 
-                key={loan.$id}
+                key={loan.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}

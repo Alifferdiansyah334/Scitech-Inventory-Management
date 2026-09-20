@@ -40,7 +40,7 @@ export function RequestReturnDialog({ loan, trigger }: { loan: Loan; trigger?: R
         }
 
         const result = await requestReturn({
-          loanId: loan.$id,
+          loanId: loan.id,
           return_image_id: uploadResult.data,
           user_note: note
         });

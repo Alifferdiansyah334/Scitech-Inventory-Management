@@ -1,77 +1,122 @@
-import { Query } from "node-appwrite";
-import { appConfig, hasAppwriteConfig, buildPreviewUrl } from "@/lib/appwrite/config";
-import { createAdminClient, createSessionClient } from "@/lib/appwrite/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type { HistoryFilters, Item, Loan, Profile, ReportRow } from "@/types";
 
+export function buildPreviewUrl(bucketId: string, filePath: string) {
+  if (!filePath) return "";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) return "";
+  
+  // Note: if bucket is public, we can just return the public URL
+  return `${supabaseUrl}/storage/v1/object/public/${bucketId}/${filePath}`;
+}
+
 export async function getCatalogItems() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("items")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-  const { databases } = createAdminClient();
-  const response = await databases.listDocuments(
-    appConfig.databaseId, 
-    appConfig.collections.items,
-    [Query.limit(5000), Query.orderDesc("$createdAt")]
-  );
-
-  return response.documents.map((document) => ({
-    ...(document as unknown as Item),
-    image_url: document.image_id ? buildPreviewUrl(document.image_id) : ""
+  if (error) {
+    console.error("Error fetching items:", error);
+    return [];
+  }
+  
+  return data.map(item => ({
+    ...item,
+    image_url: item.image_url || (item.image_id ? buildPreviewUrl("item-images", item.image_id) : "")
   })) as Item[];
 }
 
 export async function getItemById(itemId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("items")
+    .select("*")
+    .eq("id", itemId)
+    .single();
 
-  try {
-    const { databases } = createAdminClient();
-    const document = await databases.getDocument(appConfig.databaseId, appConfig.collections.items, itemId);
-    return {
-      ...(document as unknown as Item),
-      image_url: document.image_id ? buildPreviewUrl(document.image_id) : ""
-    } as Item;
-  } catch (error) {
+  if (error || !data) {
     console.error(`Failed to fetch item ${itemId}:`, error);
     return null;
   }
+
+  return {
+    ...data,
+    image_url: data.image_url || (data.image_id ? buildPreviewUrl("item-images", data.image_id) : "")
+  } as Item;
 }
 
 export async function getMyLoans(userId: string) {
+  const supabase = await createClient();
+  
+  const { data, error } = await supabase
+    .from("loans")
+    .select(`
+      *,
+      item:item_id (*),
+      borrower:borrower_id (*),
+      admin:admin_id (*)
+    `)
+    .eq("borrower_id", userId)
+    .order("created_at", { ascending: false });
 
-  const { databases } = createAdminClient();
-  const [loansResponse, items, profiles] = await Promise.all([
-    databases.listDocuments(appConfig.databaseId, appConfig.collections.loans, [
-      Query.equal("borrower_id", userId),
-      Query.limit(5000),
-      Query.orderDesc("$createdAt")
-    ]),
-    getCatalogItems(),
-    getProfiles()
-  ]);
+  if (error) {
+    console.error("Error fetching my loans:", error);
+    return [];
+  }
 
-  return loansResponse.documents.map((loan) => ({
-    ...(loan as unknown as Loan),
-    item: items.find((i) => i.$id === loan.item_id),
-    borrower: profiles.find((p) => p.userId === loan.borrower_id),
-    admin: profiles.find((p) => p.userId === (loan as any).admin_id),
-    return_image_url: (loan as any).return_image_id ? buildPreviewUrl((loan as any).return_image_id) : undefined
+  return data.map((loan: any) => ({
+    ...loan,
+    return_image_url: loan.return_image_url || (loan.return_image_id ? buildPreviewUrl("return-images", loan.return_image_id) : undefined)
   })) as Loan[];
 }
 
 export async function getProfiles() {
+  const supabase = await createAdminClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*");
 
-  const { databases } = createAdminClient();
-  const response = await databases.listDocuments(
-    appConfig.databaseId, 
-    appConfig.collections.profiles,
-    [Query.limit(5000)]
-  );
-  return response.documents as unknown as Profile[];
+  if (error) {
+    console.error("Error fetching profiles:", error);
+    return [];
+  }
+  return data as Profile[];
+}
+
+export async function getAllLoans() {
+  const supabase = await createAdminClient();
+  
+  const { data, error } = await supabase
+    .from("loans")
+    .select(`
+      *,
+      item:item_id (*),
+      borrower:borrower_id (*),
+      admin:admin_id (*)
+    `)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching all loans:", error);
+    return [];
+  }
+
+  return data.map((loan: any) => ({
+    ...loan,
+    return_image_url: loan.return_image_url || (loan.return_image_id ? buildPreviewUrl("return-images", loan.return_image_id) : undefined)
+  })) as Loan[];
 }
 
 export async function getAdminDashboardData() {
   try {
-
-    const loans = await getAllLoans();
-    const items = await getCatalogItems();
-    const profiles = await getProfiles();
+    const [loans, items, profiles] = await Promise.all([
+      getAllLoans(),
+      getCatalogItems(),
+      getProfiles()
+    ]);
 
     // 1. Calculate Status Distribution
     const statusCounts: Record<string, number> = {
@@ -114,7 +159,7 @@ export async function getAdminDashboardData() {
       }
     });
 
-    // 3. Calculate Return Trend (Simplified for now)
+    // 3. Calculate Return Trend
     const returnTrend = last6Months.map((m) => ({
       label: m.label,
       value: loans.filter((l) => {
@@ -190,27 +235,6 @@ export async function getAdminDashboardData() {
   }
 }
 
-export async function getAllLoans() {
-
-  const { databases } = createAdminClient();
-  const [loansResponse, items, profiles] = await Promise.all([
-    databases.listDocuments(appConfig.databaseId, appConfig.collections.loans, [
-      Query.limit(5000),
-      Query.orderDesc("$createdAt")
-    ]),
-    getCatalogItems(),
-    getProfiles()
-  ]);
-
-  return loansResponse.documents.map((loan) => ({
-    ...(loan as unknown as Loan),
-    item: items.find((i) => i.$id === loan.item_id),
-    borrower: profiles.find((p) => p.userId === loan.borrower_id),
-    admin: profiles.find((p) => p.userId === (loan as any).admin_id),
-    return_image_url: (loan as any).return_image_id ? buildPreviewUrl((loan as any).return_image_id) : undefined
-  })) as Loan[];
-}
-
 export async function getHistory(filters: HistoryFilters = {}) {
   const loans = await getAllLoans();
 
@@ -224,30 +248,30 @@ export async function getHistory(filters: HistoryFilters = {}) {
       const itemName = loan.item?.name?.toLowerCase() || "";
       const borrowerName = loan.borrower?.full_name?.toLowerCase() || "";
       if (!itemName.includes(search) && !borrowerName.includes(search)) return false;
-      }
+    }
 
-      if (filters.from) {
+    if (filters.from) {
       const fromDate = new Date(filters.from);
       fromDate.setHours(0, 0, 0, 0);
       const loanDate = new Date(loan.borrow_date);
       if (loanDate < fromDate) return false;
-      }
+    }
 
-      if (filters.to) {
+    if (filters.to) {
       const toDate = new Date(filters.to);
       toDate.setHours(23, 59, 59, 999);
       const loanDate = new Date(loan.borrow_date);
       if (loanDate > toDate) return false;
-      }
+    }
 
-      return true;
-      });
-      }
+    return true;
+  });
+}
+
 export async function getReports(): Promise<ReportRow[]> {
-
   const loans = await getAllLoans();
   return loans.map((loan) => ({
-    loanId: loan.$id,
+    loanId: loan.id,
     itemName: loan.item?.name ?? loan.item_id,
     borrowerName: loan.borrower?.full_name ?? loan.borrower_id,
     status: loan.status,
@@ -255,7 +279,7 @@ export async function getReports(): Promise<ReportRow[]> {
     borrowDate: loan.borrow_date,
     returnDate: loan.return_date,
     actualReturnDate: loan.actual_return_date
-  }));
+  })) as any[]; // Type assertion for compatibility if ReportRow diverges
 }
 
 export async function getActiveLoans() {
@@ -263,23 +287,24 @@ export async function getActiveLoans() {
   return loans.filter((loan) => loan.status === "approved" || loan.status === "overdue");
 }
 
-export async function getCurrentUserProfile(sessionSecret?: string, userId?: string) {
-
-  if (!sessionSecret || sessionSecret === "mock-session") {
+export async function getCurrentUserProfile() {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !user) {
     return null;
   }
 
-  try {
-    const { account, databases } = createSessionClient(sessionSecret);
-    const user = await account.get();
-    const response = await databases.listDocuments(appConfig.databaseId, appConfig.collections.profiles, [
-      Query.equal("userId", user.$id),
-      Query.limit(1)
-    ]);
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("user_id", user.id)
+    .single();
 
-    return (response.documents[0] as unknown as Profile | undefined) ?? null;
-  } catch (error) {
+  if (error) {
     console.error("Failed to fetch user profile:", error);
     return null;
   }
+
+  return data as Profile;
 }

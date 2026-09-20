@@ -2,7 +2,7 @@
 
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
-import { appConfig, buildPreviewUrl } from "@/lib/appwrite/config";
+import { buildPreviewUrl } from "@/lib/supabase/queries";
 import type { Loan } from "@/types";
 
 function tone(status: Loan["status"]) {
@@ -15,8 +15,8 @@ function tone(status: Loan["status"]) {
 export function LoanDetailDialog({ loan, open, onOpenChange }: { loan: Loan | null; open: boolean; onOpenChange: (open: boolean) => void }) {
   if (!loan) return null;
 
-  const returnImageUrl = loan.return_image_url || (loan.return_image_id ? buildPreviewUrl(loan.return_image_id) : null);
-  const adminImageUrl = loan.admin_image_id ? buildPreviewUrl(loan.admin_image_id) : null;
+  const returnImageUrl = loan.return_image_url || (loan.return_image_id ? buildPreviewUrl("return-images", loan.return_image_id) : null);
+  const adminImageUrl = loan.admin_note ? buildPreviewUrl("return-images", loan.admin_note) : null;
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="Detail Pinjaman" description={loan.item?.name ?? "Barang tidak ditemukan"}>

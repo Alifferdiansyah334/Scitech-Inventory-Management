@@ -28,8 +28,8 @@ export function ActiveLoansList({ initialData }: { initialData: Loan[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {loans.map((loan) => (
-              <tr key={loan.$id} className="transition-colors hover:bg-slate-50/50">
+            {loans.map((loan: Loan) => (
+              <tr key={loan.id} className="transition-colors hover:bg-slate-50/50">
                 <td className="whitespace-nowrap px-6 py-4">
                   <div className="flex items-center gap-3">
                     <UserAvatar name={loan.borrower?.full_name || "User"} />

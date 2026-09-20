@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getActiveLoans } from "@/lib/appwrite/queries";
+import { getActiveLoans } from "@/lib/supabase/queries";
 
 export async function GET() {
   try {

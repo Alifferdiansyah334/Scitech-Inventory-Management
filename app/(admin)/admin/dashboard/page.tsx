@@ -4,7 +4,7 @@ import { ReturnsAreaChart } from "@/components/admin/returns-area-chart";
 import { StatCard } from "@/components/admin/stat-card";
 import { StatusPieChart } from "@/components/admin/status-pie-chart";
 import { TopClientsChart } from "@/components/admin/top-clients-chart";
-import { getAdminDashboardData } from "@/lib/appwrite/queries";
+import { getAdminDashboardData } from "@/lib/supabase/queries";
 import { Typewriter } from "@/components/ui/typewriter";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export default async function AdminDashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {data.stats.map((stat) => (
+        {data.stats.map((stat: any) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </div>

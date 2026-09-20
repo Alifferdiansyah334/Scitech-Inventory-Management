@@ -1,21 +1,21 @@
 import { MyLoansTable } from "@/components/client/my-loans-table";
 import { ActiveLoansList } from "@/components/client/active-loans-list";
-import { getMyLoans, getActiveLoans } from "@/lib/appwrite/queries";
-import { getLoggedInUser } from "@/lib/appwrite/session";
+import { getMyLoans, getActiveLoans } from "@/lib/supabase/queries";
+import { getCurrentUserProfile } from "@/lib/supabase/queries";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Typewriter } from "@/components/ui/typewriter";
 
 export const dynamic = 'force-dynamic';
 
 export default async function MyLoansPage() {
-  const user = await getLoggedInUser();
+  const user = await getCurrentUserProfile();
 
   if (!user) {
     return null;
   }
 
   const [myLoans, activeLoans] = await Promise.all([
-    getMyLoans(user.profile.userId),
+    getMyLoans(user.user_id),
     getActiveLoans()
   ]);
 
@@ -35,7 +35,7 @@ export default async function MyLoansPage() {
         </TabsList>
 
         <TabsContent value="my-loans">
-          <MyLoansTable initialData={myLoans} userId={user.profile.userId} />
+          <MyLoansTable initialData={myLoans} userId={user.user_id} />
         </TabsContent>
 
         <TabsContent value="active-loans">

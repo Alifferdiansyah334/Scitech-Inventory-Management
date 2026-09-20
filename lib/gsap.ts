@@ -7,5 +7,5 @@ if (typeof window !== 'undefined') {
   gsap.registerPlugin(ScrollTrigger, ScrollToPlugin, TextPlugin);
 }
 
-export * from 'gsap';
+
 export { gsap };

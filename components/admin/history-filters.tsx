@@ -60,7 +60,7 @@ export function HistoryFilters({ items, profiles }: { items: Item[]; profiles: P
           <SelectContent>
             <SelectItem value="all">Semua Barang</SelectItem>
             {items.map((item) => (
-              <SelectItem key={item.$id} value={item.$id}>{item.name}</SelectItem>
+              <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -72,7 +72,7 @@ export function HistoryFilters({ items, profiles }: { items: Item[]; profiles: P
           <SelectContent>
             <SelectItem value="all">Semua Peminjam</SelectItem>
             {profiles.map((profile) => (
-              <SelectItem key={profile.userId} value={profile.userId}>{profile.full_name}</SelectItem>
+              <SelectItem key={profile.user_id} value={profile.user_id}>{profile.full_name}</SelectItem>
             ))}
           </SelectContent>
         </Select>

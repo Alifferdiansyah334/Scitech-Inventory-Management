@@ -23,7 +23,7 @@ export function ConfirmReturnDialog({ loan }: { loan: Loan }) {
   const handleConfirm = () => {
     startTransition(async () => {
       const result = await markLoanReturned({ 
-        loanId: loan.$id, 
+        loanId: loan.id, 
         admin_note: note, 
         actual_return_date: new Date().toISOString() 
       });
