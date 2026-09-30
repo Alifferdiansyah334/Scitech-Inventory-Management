@@ -1,11 +1,21 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:marionette_flutter/marionette_flutter.dart';
+
+import 'pages/login_page.dart';
 
 void main() {
-  runApp(const MyApp());
+  if (kDebugMode) {
+    MarionetteBinding.ensureInitialized();
+  } else {
+    WidgetsFlutterBinding.ensureInitialized();
+  }
+
+  runApp(const ScitechApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class ScitechApp extends StatelessWidget {
+  const ScitechApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -13,31 +23,11 @@ class MyApp extends StatelessWidget {
       title: 'Scitech Inventory',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF4F7FB),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF5546E8)),
       ),
-      home: const HomePage(),
-    );
-  }
-}
-
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scitech Inventory'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-      ),
-      body: const Center(
-        child: Text(
-          'Kanvas UI siap digarap!',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-      ),
+      home: const LoginPage(),
     );
   }
 }
