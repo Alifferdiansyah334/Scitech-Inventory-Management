@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCatalogItems } from "@/lib/appwrite/queries";
+import { getCatalogItems } from "@/lib/supabase/queries";
 
 export async function GET() {
   try {

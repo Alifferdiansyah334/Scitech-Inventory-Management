@@ -1,7 +1,7 @@
 import { LoanReviewTable } from "@/components/admin/loan-review-table";
 import { LoanStatusTabs } from "@/components/admin/loan-status-tabs";
 import { DeleteAllLoansButton } from "@/components/admin/delete-all-loans-button";
-import { getAllLoans } from "@/lib/appwrite/queries";
+import { getAllLoans } from "@/lib/supabase/queries";
 import { Typewriter } from "@/components/ui/typewriter";
 
 export const dynamic = 'force-dynamic';
@@ -10,7 +10,7 @@ export default async function AdminLoansPage({ searchParams }: { searchParams: P
   const params = await searchParams;
   const status = Array.isArray(params.status) ? params.status[0] : params.status;
   const loans = await getAllLoans();
-  const filtered = status ? loans.filter((loan) => loan.status === status) : loans;
+  const filtered = status ? loans.filter((loan: any) => loan.status === status) : loans;
 
   return (
     <div className="space-y-6">

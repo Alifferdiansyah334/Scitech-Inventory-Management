@@ -145,7 +145,7 @@ export function InventoryTable({ initialData }: { initialData: Item[] }) {
           </thead>
           <tbody className="divide-y divide-slate-200 bg-white whitespace-nowrap">
             {paginatedData.map((item) => (
-              <tr key={item.$id} className="transition-colors hover:bg-slate-50/50">
+              <tr key={item.id} className="transition-colors hover:bg-slate-50/50">
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-4">
                     <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
@@ -183,14 +183,14 @@ export function InventoryTable({ initialData }: { initialData: Item[] }) {
                   <Switch 
                     checked={item.is_available} 
                     disabled={isPending}
-                    onCheckedChange={(checked) => handleToggle(item.$id, checked)} 
+                    onCheckedChange={(checked) => handleToggle(item.id, checked)} 
                   />
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-2">
                     <ItemFormModal item={item} triggerLabel={<Edit2 className="h-4 w-4" />} />
                     <button 
-                      onClick={() => setDeleteModal({ isOpen: true, itemId: item.$id })}
+                      onClick={() => setDeleteModal({ isOpen: true, itemId: item.id })}
                       disabled={isPending}
                       className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-red-500/80 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50"
                     >

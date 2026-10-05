@@ -1,6 +1,6 @@
 import { InventoryTable } from "@/components/admin/inventory-table";
 import { ItemFormModal } from "@/components/admin/item-form-modal";
-import { getCatalogItems } from "@/lib/appwrite/queries";
+import { getCatalogItems } from "@/lib/supabase/queries";
 import { Typewriter } from "@/components/ui/typewriter";
 
 export const dynamic = 'force-dynamic';

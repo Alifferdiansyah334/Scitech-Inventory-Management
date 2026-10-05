@@ -16,8 +16,8 @@ export type SessionCookie = {
 };
 
 export type Profile = {
-  $id?: string;
-  userId: string;
+  id?: string;
+  user_id: string;
   full_name: string;
   email: string;
   role: UserRole;
@@ -28,7 +28,7 @@ export type Profile = {
 };
 
 export type Item = {
-  $id: string;
+  id: string;
   name: string;
   description?: string;
   category: string;
@@ -41,7 +41,7 @@ export type Item = {
 };
 
 export type Loan = {
-  $id: string;
+  id: string;
   item_id: string;
   borrower_id: string;
   quantity: number;

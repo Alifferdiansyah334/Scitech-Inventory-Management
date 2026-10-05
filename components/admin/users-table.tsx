@@ -35,7 +35,7 @@ export function UsersTable({ initialData }: { initialData: Profile[] }) {
           </thead>
           <tbody className="divide-y divide-slate-200">
             {paginatedData.map((user) => (
-              <tr key={user.userId}>
+              <tr key={user.user_id}>
                 <td className="px-4 py-4 whitespace-nowrap">
                   <div className="flex items-center gap-3">
                     <UserAvatar name={user.full_name} />
@@ -47,7 +47,7 @@ export function UsersTable({ initialData }: { initialData: Profile[] }) {
                 </td>
                 <td className="px-4 py-4 text-sm text-slate-600 whitespace-nowrap">{user.department || "-"}</td>
                 <td className="px-4 py-4 whitespace-nowrap">
-                  <Select defaultValue={user.role} onValueChange={(value) => void updateUserRole({ userId: user.userId, role: value })}>
+                  <Select defaultValue={user.role} onValueChange={(value) => void updateUserRole({ userId: user.user_id, role: value })}>
                     <SelectTrigger className="max-w-32">
                       <SelectValue />
                     </SelectTrigger>
@@ -58,7 +58,7 @@ export function UsersTable({ initialData }: { initialData: Profile[] }) {
                   </Select>
                 </td>
                 <td className="px-4 py-4 whitespace-nowrap">
-                  <Switch checked={user.is_active ?? true} onCheckedChange={(checked) => void setUserActive({ userId: user.userId, isActive: checked })} />
+                  <Switch checked={user.is_active ?? true} onCheckedChange={(checked) => void setUserActive({ userId: user.user_id, isActive: checked })} />
                 </td>
               </tr>
             ))}

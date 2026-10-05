@@ -42,7 +42,7 @@ export function LoanDecisionDialog({ loan, decision }: { loan: Loan; decision: "
 
       const action = isApprove ? approveLoan : rejectLoan;
       const result = await action({ 
-        loanId: loan.$id, 
+        loanId: loan.id, 
         admin_note: note,
         admin_image_id: adminImageId
       });

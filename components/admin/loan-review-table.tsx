@@ -51,7 +51,7 @@ export function LoanReviewTable({ initialData }: { initialData: Loan[] }) {
         </thead>
         <tbody className="divide-y divide-slate-200 bg-white whitespace-nowrap">
           {data.map((loan) => (
-            <tr key={loan.$id} className="transition-colors hover:bg-slate-50/50">
+            <tr key={loan.id} className="transition-colors hover:bg-slate-50/50">
               <td className="px-6 py-4">
                 <div className="flex flex-col">
                   <span className="text-sm font-medium text-slate-900">{loan.borrower?.full_name ?? loan.borrower_id}</span>
@@ -105,7 +105,7 @@ export function LoanReviewTable({ initialData }: { initialData: Loan[] }) {
                   )}
 
                   <button 
-                    onClick={() => handleDelete(loan.$id)}
+                    onClick={() => handleDelete(loan.id)}
                     disabled={isPending}
                     className="ml-2 inline-flex h-9 w-9 items-center justify-center rounded-lg text-red-500/80 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50"
                     title="Hapus Data"

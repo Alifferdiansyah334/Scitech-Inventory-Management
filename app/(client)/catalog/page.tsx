@@ -1,5 +1,5 @@
 import { CatalogView } from "@/components/client/catalog-view";
-import { getCatalogItems } from "@/lib/appwrite/queries";
+import { getCatalogItems } from "@/lib/supabase/queries";
 
 export const dynamic = "force-dynamic";
 

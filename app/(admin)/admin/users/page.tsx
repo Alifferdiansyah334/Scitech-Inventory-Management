@@ -1,5 +1,5 @@
 import { UsersTable } from "@/components/admin/users-table";
-import { getProfiles } from "@/lib/appwrite/queries";
+import { getProfiles } from "@/lib/supabase/queries";
 import { Typewriter } from "@/components/ui/typewriter";
 
 export const dynamic = "force-dynamic";

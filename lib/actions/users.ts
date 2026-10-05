@@ -2,49 +2,65 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Query } from "node-appwrite";
-import { appConfig, hasAppwriteConfig } from "@/lib/appwrite/config";
-import { createAdminClient, ID } from "@/lib/appwrite/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { loginSchema, registerSchema } from "@/lib/validators/auth";
 import { activeUserSchema, roleUpdateSchema } from "@/lib/validators/users";
 import type { ActionResult, Profile, SessionCookie } from "@/types";
-
-async function persistSession(session: SessionCookie) {
-  (await cookies()).set(appConfig.sessionCookieName, JSON.stringify(session), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/"
-  });
-}
 
 export async function registerUser(input: unknown): Promise<ActionResult<Profile>> {
   try {
     const values = registerSchema.parse(input);
 
-    const { account, databases } = createAdminClient();
-    const user = await account.create(ID.unique(), values.email, values.password, values.full_name);
-    const session = await account.createEmailPasswordSession(values.email, values.password);
+    const adminClient = await createAdminClient();
+    
+    // Gunakan Admin API untuk membuat user agar bisa langsung otomatis terverifikasi
+    // dan menghindari rate-limit bawaan dari halaman pendaftaran publik.
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+      email: values.email,
+      password: values.password,
+      email_confirm: true, // Otomatis terkonfirmasi tanpa butuh email OTP
+    });
 
-    const profile = await databases.createDocument(appConfig.databaseId, appConfig.collections.profiles, ID.unique(), {
-      userId: user.$id,
+    if (authError || !authData.user) {
+      const errorMsg = authError?.message === "Email already exists" 
+        ? "Email sudah terdaftar. Silakan gunakan email lain atau login." 
+        : authError?.message || "Registrasi gagal di level autentikasi.";
+      return { success: false, error: errorMsg };
+    }
+    const profilePayload = {
+      user_id: authData.user.id,
       full_name: values.full_name,
       email: values.email,
-      role: "client",
+      role: "client" as const,
       department: values.department || "",
       avatar_url: "",
       created_at: new Date().toISOString()
-    });
+    };
+    
+    // Supabase will automatically insert if we use the admin client
+    // Or we could have trigger on auth.users in Supabase, but let's do it manually for explicit control.
+    const { data: profileData, error: profileError } = await adminClient
+      .from("profiles")
+      .insert(profilePayload)
+      .select()
+      .single();
 
-    await persistSession({
-      secret: session.secret,
-      userId: user.$id,
-      role: "client",
+    if (profileError) {
+      // Rollback might be needed in a real app, but for now we return error
+      return { success: false, error: profileError.message };
+    }
+
+    // [MENGEMBALIKAN ALUR SEPERTI APPWRITE]
+    // Setelah akun dan profil terbuat via Admin, kita otomatis loginkan user tersebut
+    // agar mereka langsung punya sesi (session/cookies) dan tidak perlu login ulang.
+    const supabase = await createClient();
+    await supabase.auth.signInWithPassword({
       email: values.email,
-      name: values.full_name
+      password: values.password,
     });
 
-    return { success: true, data: profile as unknown as Profile };
+    return { success: true, data: profileData as Profile };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Registrasi gagal." };
   }
@@ -54,34 +70,35 @@ export async function loginUser(input: unknown): Promise<ActionResult<Profile>> 
   try {
     const values = loginSchema.parse(input);
 
-    const { account, databases } = createAdminClient();
-    const session = await account.createEmailPasswordSession(values.email, values.password);
-    const profiles = await databases.listDocuments(appConfig.databaseId, appConfig.collections.profiles, [
-      Query.equal("email", values.email),
-      Query.limit(1)
-    ]);
-    const profile = profiles.documents[0] as unknown as Profile | undefined;
+    const supabase = await createClient();
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: values.email,
+      password: values.password,
+    });
 
-    if (!profile) {
+    if (authError || !authData.user) {
+      return { success: false, error: authError?.message || "Login gagal." };
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("user_id", authData.user.id)
+      .single();
+
+    if (profileError || !profile) {
       return { success: false, error: "Profil pengguna tidak ditemukan." };
     }
 
-    await persistSession({
-      secret: session.secret,
-      userId: profile.userId,
-      role: profile.role,
-      email: profile.email,
-      name: profile.full_name
-    });
-
-    return { success: true, data: profile };
+    return { success: true, data: profile as Profile };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Login gagal." };
   }
 }
 
 export async function logoutUser() {
-  (await cookies()).delete(appConfig.sessionCookieName);
+  const supabase = await createClient();
+  await supabase.auth.signOut();
   redirect("/login");
 }
 
@@ -89,20 +106,16 @@ export async function updateUserRole(input: unknown): Promise<ActionResult> {
   try {
     const values = roleUpdateSchema.parse(input);
 
-    const { databases } = createAdminClient();
-    const response = await databases.listDocuments(appConfig.databaseId, appConfig.collections.profiles, [
-      Query.equal("userId", values.userId),
-      Query.limit(1)
-    ]);
-    const profile = response.documents[0];
+    const adminClient = await createAdminClient();
+    
+    const { error } = await adminClient
+      .from("profiles")
+      .update({ role: values.role })
+      .eq("user_id", values.userId);
 
-    if (!profile) {
-      return { success: false, error: "Profil pengguna tidak ditemukan." };
+    if (error) {
+      return { success: false, error: error.message };
     }
-
-    await databases.updateDocument(appConfig.databaseId, appConfig.collections.profiles, profile.$id, {
-      role: values.role
-    });
 
     return { success: true, data: values };
   } catch (error) {
@@ -114,8 +127,16 @@ export async function setUserActive(input: unknown): Promise<ActionResult> {
   try {
     const values = activeUserSchema.parse(input);
 
-    const { users } = createAdminClient();
-    await users.updateStatus(values.userId, values.isActive);
+    const adminClient = await createAdminClient();
+    const { error } = await adminClient
+      .from("profiles")
+      .update({ is_active: values.isActive })
+      .eq("user_id", values.userId);
+      
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    
     return { success: true, data: values };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Gagal mengubah status pengguna." };
@@ -124,7 +145,25 @@ export async function setUserActive(input: unknown): Promise<ActionResult> {
 
 export async function updateOwnProfile(input: Partial<Profile>): Promise<ActionResult<Profile>> {
   try {
-    return { success: true, data: input as Profile };
+    const supabase = await createClient();
+    const { data: authData } = await supabase.auth.getUser();
+    
+    if (!authData.user) {
+      return { success: false, error: "Tidak dapat mengidentifikasi pengguna." };
+    }
+    
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(input)
+      .eq("user_id", authData.user.id)
+      .select()
+      .single();
+      
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data as Profile };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Gagal memperbarui profil." };
   }

@@ -19,7 +19,7 @@ import { ImageDropzone } from "@/components/admin/image-dropzone";
 
 type ItemValues = z.infer<typeof itemSchema>;
 
-export function ItemFormModal({ item, triggerLabel = "Tambah barang" }: { item?: Item; triggerLabel?: string }) {
+export function ItemFormModal({ item, triggerLabel = "Tambah barang", onSuccess }: { item?: Item; triggerLabel?: React.ReactNode; onSuccess?: () => void; }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -57,7 +57,7 @@ export function ItemFormModal({ item, triggerLabel = "Tambah barang" }: { item?:
       }
 
       const payload = { ...values, image_id: imageId };
-      const result = item ? await updateItem(item.$id, payload) : await createItem(payload);
+      const result = item ? await updateItem(item.id, payload) : await createItem(payload);
 
       if (!result.success) {
         notify("Gagal menyimpan item", result.error);

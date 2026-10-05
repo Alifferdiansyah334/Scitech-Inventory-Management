@@ -1,10 +1,8 @@
 "use server";
 
-import { appConfig, hasAppwriteConfig } from "@/lib/appwrite/config";
-import { createAdminClient, ID } from "@/lib/appwrite/server";
-import { Query } from "node-appwrite";
-import { InputFile } from "node-appwrite/file";
-import { getLoggedInUser } from "@/lib/appwrite/session";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentUserProfile } from "@/lib/supabase/queries";
 import { loanDecisionSchema, loanRequestSchema, requestReturnSchema, returnLoanSchema } from "@/lib/validators/loans";
 import type { ActionResult, LoanStatus, Loan } from "@/types";
 
@@ -13,19 +11,20 @@ export async function uploadReturnImage(formData: FormData): Promise<ActionResul
     const file = formData.get("file") as File;
     if (!file) return { success: false, error: "Tidak ada file yang diunggah." };
 
-    const { storage } = createAdminClient();
-    
-    // Convert File to Buffer for InputFile.fromBuffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const supabase = await createAdminClient();
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
 
-    const uploadedFile = await storage.createFile(
-      appConfig.buckets.itemImages,
-      ID.unique(),
-      InputFile.fromBuffer(buffer, file.name)
-    );
+    const { data, error } = await supabase
+      .storage
+      .from("return-images")
+      .upload(fileName, file);
 
-    return { success: true, data: uploadedFile.$id };
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data.path };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Gagal mengunggah gambar." };
   }
@@ -39,38 +38,55 @@ async function updateLoanStatus(
   admin_image_id?: string,
   extras?: object
 ) {
-  const user = await getLoggedInUser();
+  const profile = await getCurrentUserProfile();
+  
   const payload = {
     status,
-    admin_id: user?.profile.userId || "",
-    admin_note: admin_note || "",
+    admin_id: profile?.user_id || null,
+    admin_note: admin_note || null,
     ...(actual_return_date ? { actual_return_date } : {}),
     ...(admin_image_id ? { admin_image_id } : {}),
     ...extras
   };
 
-  const { databases } = createAdminClient();
-  return databases.updateDocument(appConfig.databaseId, appConfig.collections.loans, loanId, payload);
+  const supabase = await createAdminClient();
+  const { data, error } = await supabase
+    .from("loans")
+    .update(payload)
+    .eq("id", loanId)
+    .select()
+    .single();
+    
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export async function createLoanRequest(input: unknown): Promise<ActionResult> {
   try {
     const values = loanRequestSchema.parse(input);
-    const user = await getLoggedInUser();
+    const profile = await getCurrentUserProfile();
 
-    if (!user) {
+    if (!profile) {
       return { success: false, error: "Sesi pengguna tidak ditemukan." };
     }
 
-    const { databases } = createAdminClient();
-    const loan = await databases.createDocument(appConfig.databaseId, appConfig.collections.loans, ID.unique(), {
-      ...values,
-      borrower_id: user.profile.userId,
-      status: "pending",
-      created_at: new Date().toISOString()
-    });
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("loans")
+      .insert({
+        ...values,
+        borrower_id: profile.user_id,
+        status: "pending",
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
 
-    return { success: true, data: loan };
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Gagal membuat pengajuan pinjaman." };
   }
@@ -80,18 +96,37 @@ export async function approveLoan(input: unknown): Promise<ActionResult> {
   try {
     const values = loanDecisionSchema.parse(input);
 
-    const { databases } = createAdminClient();
-    const loan = await databases.getDocument(appConfig.databaseId, appConfig.collections.loans, values.loanId);
-    const item = await databases.getDocument(appConfig.databaseId, appConfig.collections.items, loan.item_id);
+    const supabase = await createAdminClient();
+    
+    // Get loan
+    const { data: loan, error: loanError } = await supabase
+      .from("loans")
+      .select("*")
+      .eq("id", values.loanId)
+      .single();
+      
+    if (loanError || !loan) throw new Error(loanError?.message || "Loan not found");
+
+    // Get item
+    const { data: item, error: itemError } = await supabase
+      .from("items")
+      .select("*")
+      .eq("id", loan.item_id)
+      .single();
+      
+    if (itemError || !item) throw new Error(itemError?.message || "Item not found");
+
     const nextAvailable = Number(item.quantity_available) - Number(loan.quantity);
 
     if (nextAvailable < 0) {
       return { success: false, error: "Stok tersedia tidak mencukupi." };
     }
 
-    await databases.updateDocument(appConfig.databaseId, appConfig.collections.items, item.$id, {
-      quantity_available: nextAvailable
-    });
+    // Update item
+    await supabase
+      .from("items")
+      .update({ quantity_available: nextAvailable })
+      .eq("id", item.id);
 
     const updatedLoan = await updateLoanStatus(values.loanId, "approved", values.admin_note, undefined, values.admin_image_id);
     return { success: true, data: updatedLoan };
@@ -115,13 +150,27 @@ export async function markLoanReturned(input: unknown): Promise<ActionResult> {
   try {
     const values = returnLoanSchema.parse(input);
 
-    const { databases } = createAdminClient();
-    const loan = await databases.getDocument(appConfig.databaseId, appConfig.collections.loans, values.loanId);
-    const item = await databases.getDocument(appConfig.databaseId, appConfig.collections.items, loan.item_id);
+    const supabase = await createAdminClient();
+    
+    // Get loan
+    const { data: loan } = await supabase
+      .from("loans")
+      .select("*")
+      .eq("id", values.loanId)
+      .single();
+      
+    // Get item
+    const { data: item } = await supabase
+      .from("items")
+      .select("*")
+      .eq("id", loan.item_id)
+      .single();
 
-    await databases.updateDocument(appConfig.databaseId, appConfig.collections.items, item.$id, {
-      quantity_available: Number(item.quantity_available) + Number(loan.quantity)
-    });
+    // Update item quantity
+    await supabase
+      .from("items")
+      .update({ quantity_available: Number(item.quantity_available) + Number(loan.quantity) })
+      .eq("id", item.id);
 
     const updatedLoan = await updateLoanStatus(values.loanId, "returned", values.admin_note, values.actual_return_date);
     return { success: true, data: updatedLoan };
@@ -147,8 +196,13 @@ export async function requestReturn(input: unknown): Promise<ActionResult> {
 
 export async function deleteLoan(loanId: string): Promise<ActionResult> {
   try {
-    const { databases } = createAdminClient();
-    await databases.deleteDocument(appConfig.databaseId, appConfig.collections.loans, loanId);
+    const supabase = await createAdminClient();
+    const { error } = await supabase
+      .from("loans")
+      .delete()
+      .eq("id", loanId);
+
+    if (error) throw new Error(error.message);
 
     return { success: true };
   } catch (error) {
@@ -158,34 +212,16 @@ export async function deleteLoan(loanId: string): Promise<ActionResult> {
 
 export async function deleteAllLoans(): Promise<ActionResult> {
   try {
-    const { databases } = createAdminClient();
+    const supabase = await createAdminClient();
     
-    let deletedCount = 0;
-    let hasMore = true;
+    // Delete all loans without condition isn't supported directly safely in Postgrest unless explicitly allowed
+    // But we can delete where id is not null
+    const { error } = await supabase
+      .from("loans")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000"); // Just a dummy condition to match everything
 
-    while (hasMore) {
-      const response = await databases.listDocuments(
-        appConfig.databaseId, 
-        appConfig.collections.loans,
-        [Query.limit(100)]
-      );
-      
-      if (response.documents.length === 0) {
-        hasMore = false;
-        break;
-      }
-
-      await Promise.all(
-        response.documents.map((loan) => 
-          databases.deleteDocument(appConfig.databaseId, appConfig.collections.loans, loan.$id)
-        )
-      );
-
-      deletedCount += response.documents.length;
-      if (response.documents.length < 100) {
-        hasMore = false;
-      }
-    }
+    if (error) throw new Error(error.message);
 
     return { success: true };
   } catch (error) {

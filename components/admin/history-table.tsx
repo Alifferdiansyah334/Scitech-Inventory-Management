@@ -46,7 +46,7 @@ export function HistoryTable({ loans }: { loans: Loan[] }) {
           </thead>
           <tbody className="divide-y divide-slate-200 whitespace-nowrap">
             {paginatedLoans.map((loan) => (
-              <tr key={loan.$id} className={loan.status === "overdue" ? "bg-red-50/50 hover:bg-red-100/30" : "hover:bg-slate-50/50"}>
+              <tr key={loan.id} className={loan.status === "overdue" ? "bg-red-50/50 hover:bg-red-100/30" : "hover:bg-slate-50/50"}>
                 <td className="px-4 py-4 text-sm text-slate-700">{loan.item?.name ?? loan.item_id}</td>
                 <td className="px-4 py-4 text-sm text-slate-700">{loan.borrower?.full_name ?? loan.borrower_id}</td>
                 <td className="px-4 py-4 text-sm text-slate-600">{new Date(loan.borrow_date).toLocaleDateString("id-ID")} - {new Date(loan.return_date).toLocaleDateString("id-ID")}</td>
@@ -74,7 +74,7 @@ export function HistoryTable({ loans }: { loans: Loan[] }) {
                     onClick={() => {
                       if (confirm("Hapus data riwayat ini?")) {
                         startTransition(async () => {
-                          const result = await deleteLoan(loan.$id);
+                          const result = await deleteLoan(loan.id);
                           if (result.success) {
                             notify("Berhasil", "Data riwayat telah dihapus.");
                             await queryClient.invalidateQueries({ queryKey: ["admin", "history"] });

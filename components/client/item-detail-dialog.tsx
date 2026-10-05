@@ -60,7 +60,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: { item: Item | nu
 
           <div className="pt-4">
             <Button asChild className="h-16 w-full text-lg shadow-xl shadow-indigo-100">
-              <Link href={`/borrow/${item.$id}`} className="flex items-center justify-center gap-3">
+              <Link href={`/borrow/${item.id}`} className="flex items-center justify-center gap-3">
                 <span>Ajukan Peminjaman Sekarang</span>
                 <ArrowRight className="h-5 w-5" />
               </Link>

@@ -23,7 +23,7 @@ export function BorrowForm({ item, userId, userName }: { item: Item; userId: str
   const form = useForm<BorrowValues>({
     resolver: zodResolver(loanRequestSchema),
     defaultValues: {
-      item_id: item.$id,
+      item_id: item.id,
       quantity: 1,
       purpose: "",
       borrow_date: new Date().toISOString().slice(0, 10),

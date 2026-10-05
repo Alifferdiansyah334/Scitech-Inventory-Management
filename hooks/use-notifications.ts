@@ -2,10 +2,8 @@
 
 import { useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getBrowserClient, browserDatabases } from "@/lib/appwrite/client";
-import { appConfig } from "@/lib/appwrite/config";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast";
-import { Query } from "appwrite";
 
 export function useNotifications() {
   const queryClient = useQueryClient();
@@ -13,18 +11,14 @@ export function useNotifications() {
 
   const getProfileName = useCallback(async (userId: string) => {
     try {
-      if (!appConfig.endpoint || !appConfig.projectId) return "Seseorang";
-
-      const response = await browserDatabases.listDocuments(
-        appConfig.databaseId,
-        appConfig.collections.profiles,
-        [Query.equal("userId", userId)]
-      );
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("user_id", userId)
+        .single();
       
-      if (response.documents.length > 0) {
-        return (response.documents[0] as any).full_name;
-      }
-      return "Seseorang";
+      return data?.full_name || "Seseorang";
     } catch (error) {
       console.error("Gagal mengambil profil:", error);
       return "Seseorang";
@@ -46,62 +40,73 @@ export function useNotifications() {
       Notification.requestPermission();
     }
 
-    const client = getBrowserClient();
+    const supabase = createClient();
 
     // Subscribe to Loans
-    const unsubscribeLoans = client.subscribe(
-      `databases.${appConfig.databaseId}.collections.${appConfig.collections.loans}.documents`,
-      async (response) => {
-        const events = response.events;
-        const payload = response.payload as any;
-        
-        // Invalidate queries
-        queryClient.invalidateQueries({ queryKey: ["loans"] });
-        queryClient.invalidateQueries({ queryKey: ["admin", "loans"] });
-        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+    const loansChannel = supabase
+      .channel('schema-db-changes-loans')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'loans',
+        },
+        async (payload) => {
+          // Invalidate queries
+          queryClient.invalidateQueries({ queryKey: ["loans"] });
+          queryClient.invalidateQueries({ queryKey: ["admin", "loans"] });
+          queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
 
-        if (events.some(e => e.includes(".create"))) {
-          const name = await getProfileName(payload.borrower_id);
-          showNotification("Peminjaman Baru", `${name} mengajukan peminjaman baru.`);
-        } else if (events.some(e => e.includes(".update"))) {
-          const status = payload.status;
-          const adminName = payload.admin_id ? await getProfileName(payload.admin_id) : "Admin";
-          
-          if (status === "approved") {
-            showNotification("Pinjaman Disetujui", `Pinjaman telah disetujui oleh ${adminName}.`);
-          } else if (status === "rejected") {
-            showNotification("Pinjaman Ditolak", `Pinjaman telah ditolak oleh ${adminName}.`);
-          } else if (status === "returning") {
-            const name = await getProfileName(payload.borrower_id);
-            showNotification("Pengajuan Pengembalian", `${name} mengajukan pengembalian barang.`);
-          } else if (status === "returned") {
-            showNotification("Barang Dikembalikan", `Pengembalian barang dikonfirmasi oleh ${adminName}.`);
+          if (payload.eventType === 'INSERT') {
+            const name = await getProfileName(payload.new.borrower_id);
+            showNotification("Peminjaman Baru", `${name} mengajukan peminjaman baru.`);
+          } else if (payload.eventType === 'UPDATE') {
+            const status = payload.new.status;
+            const adminName = payload.new.admin_id ? await getProfileName(payload.new.admin_id) : "Admin";
+            
+            // Assuming status changed
+            if (payload.old.status !== status) {
+              if (status === "approved") {
+                showNotification("Pinjaman Disetujui", `Pinjaman telah disetujui oleh ${adminName}.`);
+              } else if (status === "rejected") {
+                showNotification("Pinjaman Ditolak", `Pinjaman telah ditolak oleh ${adminName}.`);
+              } else if (status === "returning") {
+                const name = await getProfileName(payload.new.borrower_id);
+                showNotification("Pengajuan Pengembalian", `${name} mengajukan pengembalian barang.`);
+              } else if (status === "returned") {
+                showNotification("Barang Dikembalikan", `Pengembalian barang dikonfirmasi oleh ${adminName}.`);
+              }
+            }
           }
         }
-      }
-    );
+      )
+      .subscribe();
 
     // Subscribe to Items
-    const unsubscribeItems = client.subscribe(
-      `databases.${appConfig.databaseId}.collections.${appConfig.collections.items}.documents`,
-      async (response) => {
-        const events = response.events;
-        const payload = response.payload as any;
+    const itemsChannel = supabase
+      .channel('schema-db-changes-items')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'items',
+        },
+        async (payload) => {
+          // Invalidate queries
+          queryClient.invalidateQueries({ queryKey: ["catalog"] });
+          queryClient.invalidateQueries({ queryKey: ["admin", "items"] });
 
-        // Invalidate queries
-        queryClient.invalidateQueries({ queryKey: ["catalog"] });
-        queryClient.invalidateQueries({ queryKey: ["admin", "items"] });
-
-        if (events.some(e => e.includes(".create"))) {
-          const adminName = payload.admin_id ? await getProfileName(payload.admin_id) : "Admin";
-          showNotification("Barang Baru", `${adminName} menambahkan barang "${payload.name}" ke inventaris.`);
+          const adminName = payload.new.admin_id ? await getProfileName(payload.new.admin_id) : "Admin";
+          showNotification("Barang Baru", `${adminName} menambahkan barang "${payload.new.name}" ke inventaris.`);
         }
-      }
-    );
+      )
+      .subscribe();
 
     return () => {
-      unsubscribeLoans();
-      unsubscribeItems();
+      supabase.removeChannel(loansChannel);
+      supabase.removeChannel(itemsChannel);
     };
   }, [queryClient, getProfileName, showNotification]);
 }
