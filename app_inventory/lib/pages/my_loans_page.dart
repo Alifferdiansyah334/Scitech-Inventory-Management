@@ -4,6 +4,7 @@ import '../data/loan_store.dart';
 import '../data/profile_store.dart';
 import '../widgets/profile_menu_button.dart';
 import 'catalog_page.dart';
+import 'return_loan_page.dart';
 
 class MyLoansPage extends StatefulWidget {
   const MyLoansPage({super.key});
@@ -110,16 +111,21 @@ class _MyLoansPageState extends State<MyLoansPage> {
   }
 
   Widget _buildActiveLoans(List<LoanRecord> loans) {
-    if (loans.isEmpty) {
+    final active = loans.where((loan) {
+      final status = loan.status;
+      return status == 'Diajukan' ||
+          status == 'Disetujui' ||
+          status == 'Sedang Dipinjam' ||
+          status == 'Menunggu Pengembalian' ||
+          status == 'Menunggu Konfirmasi Admin' ||
+          status == 'approved' ||
+          status == 'overdue';
+    }).toList();
+    if (active.isEmpty) {
       return _emptyState('Tidak ada peminjaman aktif saat ini.');
     }
     return Column(
-      children: loans
-          .where(
-            (loan) => loan.status == 'approved' || loan.status == 'overdue',
-          )
-          .map((loan) => _LoanCard(loan: loan))
-          .toList(),
+      children: active.map((loan) => _LoanCard(loan: loan)).toList(),
     );
   }
 
@@ -192,9 +198,16 @@ class _LoanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = loan.status == 'pending'
-        ? const Color(0xFFD97706)
-        : const Color(0xFF059669);
+    final statusColor = switch (loan.status) {
+      'Diajukan' || 'Menunggu' || 'pending' => const Color(0xFFD97706),
+      'Disetujui' || 'Sedang Dipinjam' || 'Menunggu Pengembalian' || 'approved' => const Color(0xFF059669),
+      'Menunggu Konfirmasi Admin' => const Color(0xFF2563EB),
+      'Perlu Tindak Lanjut' || 'Ditolak' => const Color(0xFFDC2626),
+      'Dikembalikan' => const Color(0xFF0F766E),
+      _ => const Color(0xFF4F46E5),
+    };
+    final canReturn = <String>{'Disetujui', 'Sedang Dipinjam', 'Menunggu Pengembalian', 'approved'}.contains(loan.status);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -203,54 +216,81 @@ class _LoanCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: const Color(0xFFEEF2FF),
-            child: Icon(loan.item.icon, color: const Color(0xFF4F46E5)),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  loan.item.name,
-                  style: const TextStyle(
-                    color: Color(0xFF0F172A),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: const Color(0xFFEEF2FF),
+                child: Icon(loan.item.icon, color: const Color(0xFF4F46E5)),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      loan.itemName,
+                      style: const TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '${loan.quantity} Unit Terpinjam • ${_formatDate(loan.borrowDate)}',
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  loan.status.toUpperCase(),
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.6,
                   ),
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  '${loan.quantity} Unit Terpinjam • ${_formatDate(loan.borrowDate)}',
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+              ),
+            ],
+          ),
+          if (canReturn) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ReturnLoanPage(loan: loan),
                   ),
                 ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              loan.status.toUpperCase(),
-              style: TextStyle(
-                color: statusColor,
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.6,
+                icon: const Icon(Icons.assignment_return_rounded),
+                label: const Text('Kembalikan Barang'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

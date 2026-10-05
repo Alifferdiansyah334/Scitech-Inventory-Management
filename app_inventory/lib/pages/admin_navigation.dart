@@ -192,8 +192,11 @@ class AdminStatusChip extends StatelessWidget {
       'Disetujui' ||
       'Diterima' ||
       'Selesai' ||
-      'Tersedia' => const Color(0xFF059669),
-      'Ditolak' || 'Habis' => const Color(0xFFDC2626),
+      'Tersedia' ||
+      'Dikembalikan' => const Color(0xFF059669),
+      'Ditolak' || 'Habis' || 'Perlu Tindak Lanjut' => const Color(0xFFDC2626),
+      'Menunggu Konfirmasi Admin' => const Color(0xFF2563EB),
+      'Sedang Dipinjam' || 'Menunggu Pengembalian' => const Color(0xFF7C3AED),
       _ => adminIndigo,
     };
     return Container(

@@ -22,22 +22,36 @@ class InventoryItem {
 
 class AdminLoan {
   AdminLoan({
+    String? id,
     required this.borrower,
+    required this.borrowerPhone,
     required this.itemName,
     required this.quantity,
     required this.borrowDate,
     required this.returnDate,
     required this.status,
     this.onStatusChanged,
-  });
+    this.adminBeforePhotoPath,
+    this.borrowerReturnPhotoPath,
+    this.returnNote,
+    this.adminIssueNote,
+    this.returnDateConfirmed,
+  }) : id = id ?? 'loan_${DateTime.now().microsecondsSinceEpoch}';
 
+  final String id;
   final String borrower;
+  final String borrowerPhone;
   final String itemName;
   final int quantity;
   final DateTime borrowDate;
   final DateTime returnDate;
   final void Function(String status)? onStatusChanged;
   String status;
+  String? adminBeforePhotoPath;
+  String? borrowerReturnPhotoPath;
+  String? returnNote;
+  String? adminIssueNote;
+  DateTime? returnDateConfirmed;
 }
 
 class ProcurementRecord {
@@ -199,6 +213,7 @@ class AdminStore extends ChangeNotifier {
     loans.addAll([
       AdminLoan(
         borrower: 'Nadia Putri',
+        borrowerPhone: '+628123456789',
         itemName: 'Arduino Uno',
         quantity: 2,
         borrowDate: now.subtract(const Duration(days: 1)),
@@ -207,6 +222,7 @@ class AdminStore extends ChangeNotifier {
       ),
       AdminLoan(
         borrower: 'Rafi Pratama',
+        borrowerPhone: '+628112233445',
         itemName: 'ESP32',
         quantity: 1,
         borrowDate: now.subtract(const Duration(days: 2)),
@@ -215,6 +231,7 @@ class AdminStore extends ChangeNotifier {
       ),
       AdminLoan(
         borrower: 'Dimas Saputra',
+        borrowerPhone: '+628556677889',
         itemName: 'Sensor Ultrasonik',
         quantity: 2,
         borrowDate: now.subtract(const Duration(days: 5)),
@@ -223,6 +240,7 @@ class AdminStore extends ChangeNotifier {
       ),
       AdminLoan(
         borrower: 'Alya Rahma',
+        borrowerPhone: '+628998877665',
         itemName: 'Kabel Jumper',
         quantity: 3,
         borrowDate: now.subtract(const Duration(days: 8)),
@@ -231,6 +249,7 @@ class AdminStore extends ChangeNotifier {
       ),
       AdminLoan(
         borrower: 'Bima Akbar',
+        borrowerPhone: '+628777666555',
         itemName: 'LED',
         quantity: 5,
         borrowDate: now.subtract(const Duration(days: 3)),
@@ -305,14 +324,25 @@ class AdminStore extends ChangeNotifier {
   String adminName = 'Admin Scitech';
   String adminEmail = 'admin@scitech.id';
   String adminPassword = 'admin123';
+  String adminPhone = '+628123456789';
 
   int get totalStock => inventory.fold(0, (sum, item) => sum + item.totalStock);
   int get availableStock =>
       inventory.fold(0, (sum, item) => sum + item.availableStock);
   int get borrowedStock =>
       inventory.fold(0, (sum, item) => sum + item.borrowedStock);
-  int get pendingLoans =>
-      loans.where((loan) => loan.status == 'Menunggu').length;
+  int get pendingLoans => loans
+      .where(
+        (loan) => loan.status == 'Menunggu' || loan.status == 'Diajukan',
+      )
+      .length;
+
+  AdminLoan? findLoanById(String loanId) {
+    for (final loan in loans) {
+      if (loan.id == loanId) return loan;
+    }
+    return null;
+  }
 
   void updateAdminProfile({required String name, required String email}) {
     adminName = name;
@@ -336,14 +366,14 @@ class AdminStore extends ChangeNotifier {
 
   bool approveLoan(AdminLoan loan) {
     final item = inventoryItem(loan.itemName);
-    if (loan.status != 'Menunggu' ||
+    if ((loan.status != 'Menunggu' && loan.status != 'Diajukan') ||
         item == null ||
         item.availableStock < loan.quantity) {
       return false;
     }
     item.borrowedStock += loan.quantity;
     loan.status = 'Disetujui';
-    loan.onStatusChanged?.call('approved');
+    loan.onStatusChanged?.call('Disetujui');
     _record(
       'Peminjaman disetujui',
       '${loan.borrower} • ${loan.itemName}',
@@ -354,9 +384,9 @@ class AdminStore extends ChangeNotifier {
   }
 
   void rejectLoan(AdminLoan loan) {
-    if (loan.status != 'Menunggu') return;
+    if (loan.status != 'Menunggu' && loan.status != 'Diajukan') return;
     loan.status = 'Ditolak';
-    loan.onStatusChanged?.call('rejected');
+    loan.onStatusChanged?.call('Ditolak');
     _record(
       'Peminjaman ditolak',
       '${loan.borrower} • ${loan.itemName}',
@@ -365,8 +395,50 @@ class AdminStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool submitReturnProof({
+    required String loanId,
+    required String photoPath,
+    required String note,
+  }) {
+    final loan = findLoanById(loanId);
+    if (loan == null) return false;
+    loan.borrowerReturnPhotoPath = photoPath;
+    loan.returnNote = note.trim();
+    loan.status = 'Menunggu Konfirmasi Admin';
+    loan.returnDateConfirmed = DateTime.now();
+    notifyListeners();
+    return true;
+  }
+
+  bool confirmReturn({required String loanId, required String? issueNote}) {
+    final loan = findLoanById(loanId);
+    if (loan == null) return false;
+    final item = inventoryItem(loan.itemName);
+    if (item != null) {
+      item.borrowedStock = (item.borrowedStock - loan.quantity).clamp(0, item.totalStock);
+    }
+    loan.status = 'Dikembalikan';
+    loan.returnDateConfirmed = DateTime.now();
+    if (issueNote != null && issueNote.trim().isNotEmpty) {
+      loan.adminIssueNote = issueNote.trim();
+    }
+    notifyListeners();
+    return true;
+  }
+
+  bool markIssue({required String loanId, required String issueNote}) {
+    final loan = findLoanById(loanId);
+    if (loan == null) return false;
+    loan.status = 'Perlu Tindak Lanjut';
+    loan.adminIssueNote = issueNote.trim();
+    notifyListeners();
+    return true;
+  }
+
   void addBorrowRequest({
+    required String id,
     required String borrower,
+    required String borrowerPhone,
     required String itemName,
     required int quantity,
     required DateTime borrowDate,
@@ -376,7 +448,9 @@ class AdminStore extends ChangeNotifier {
     loans.insert(
       0,
       AdminLoan(
+        id: id,
         borrower: borrower,
+        borrowerPhone: borrowerPhone,
         itemName: itemName,
         quantity: quantity,
         borrowDate: borrowDate,

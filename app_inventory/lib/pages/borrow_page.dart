@@ -43,19 +43,26 @@ class _BorrowPageState extends State<BorrowPage> {
     }
 
     final record = LoanRecord(
+      id: LoanStore.instance.generateId(),
       item: widget.item,
+      itemName: widget.item.name,
+      borrowerName: ProfileStore.instance.profile.name,
+      borrowerPhone: '+628123456789',
       quantity: quantity,
       purpose: purposeController.text.trim(),
       borrowDate: DateTime.now(),
-      returnDate: returnDate,
+      dueDate: returnDate,
+      status: 'Diajukan',
     );
     LoanStore.instance.add(record);
     AdminStore.instance.addBorrowRequest(
+      id: record.id,
       borrower: ProfileStore.instance.profile.name,
+      borrowerPhone: '+628123456789',
       itemName: widget.item.name,
       quantity: quantity,
       borrowDate: record.borrowDate,
-      returnDate: record.returnDate,
+      returnDate: record.dueDate,
       onStatusChanged: (status) => record.status = status,
     );
 
