@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { getMyLoans, getCurrentUserProfile } from "@/lib/supabase/queries";
-
+import { getMyLoans } from "@/lib/backend/queries";
+import { requireProfile } from "@/lib/auth/session";
+import { createLoanRequest } from "@/lib/actions/loans";
+import { apiError } from "@/lib/backend/http";
 export async function GET() {
+  try { const p = await requireProfile(); return NextResponse.json(await getMyLoans(p.user_id)); }
+  catch (error) { return apiError(error); }
+}
+export async function POST(request: Request) {
   try {
-    const profile = await getCurrentUserProfile();
-    if (!profile) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const loans = await getMyLoans(profile.user_id);
-    return NextResponse.json(loans);
-  } catch (error) {
-    return NextResponse.json({ error: "Gagal mengambil data pinjaman" }, { status: 500 });
-  }
+    await requireProfile();
+    const result = await createLoanRequest(await request.json());
+    return NextResponse.json(result, { status: result.success ? 201 : 400 });
+  } catch (error) { return apiError(error); }
 }

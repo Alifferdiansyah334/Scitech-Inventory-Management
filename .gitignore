@@ -61,3 +61,39 @@ AGENTS.md
 
 # Runtime lain
 deno.lock
+.neon
+
+# Local installation and build cache on D:
+.runtime-cache/
+.runtime-temp/
+output/
+/public/app/
+
+# Local changelogs, audits, and reports must not be pushed
+changelog.md
+CHANGELOG.md
+*audit*.json
+*audit*.md
+*AUDIT*.md
+docs/
+supabase/.temp/
+scratch/
+*.backup
+
+# Private signing material and generated releases
+**/key.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+*.apk
+*.aab
+/public/releases/
+*.hprof
+*.heapdump
+*.dmp
+hs_err_pid*
+replay_pid*
+report.*.json

@@ -1,17 +1,15 @@
-# app_inventory
+# Aplikasi Flutter SAMS
 
-A new Flutter project.
+lib/main.dart menjalankan lib/production. Katalog, transaksi, akun dan hak akses berasal dari API. Halaman demo lama tidak menjadi entrypoint produksi.
 
-## Getting Started
+Pengembangan dengan API lokal port 3000:
 
-This project is a starting point for a Flutter application.
+    flutter run -d chrome --web-port=5173 --no-web-resources-cdn
 
-A few resources to get you started if this is your first Flutter project:
+Rilis untuk Vercel:
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+    flutter build web --release --base-href=/app/ --no-web-resources-cdn
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Rilis browser memakai API pada origin yang sama. Build native memerlukan alamat HTTPS API melalui --dart-define=API_URL=.... CanvasKit dibundel lokal melalui web/flutter_bootstrap.js.
+
+Verifikasi: flutter test dan flutter analyze --no-pub.

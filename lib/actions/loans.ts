@@ -1,230 +1,111 @@
 "use server";
-
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentUserProfile } from "@/lib/supabase/queries";
+import { database } from "@/lib/supabase/db";
+import { requireProfile, requireAdmin } from "@/lib/auth/session";
+import { uploadImage } from "@/lib/backend/uploads";
 import { loanDecisionSchema, loanRequestSchema, requestReturnSchema, returnLoanSchema } from "@/lib/validators/loans";
-import type { ActionResult, LoanStatus, Loan } from "@/types";
+import type { ActionResult } from "@/types";
 
 export async function uploadReturnImage(formData: FormData): Promise<ActionResult<string>> {
-  try {
-    const file = formData.get("file") as File;
-    if (!file) return { success: false, error: "Tidak ada file yang diunggah." };
-
-    const supabase = await createAdminClient();
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-
-    const { data, error } = await supabase
-      .storage
-      .from("return-images")
-      .upload(fileName, file);
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, data: data.path };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Gagal mengunggah gambar." };
-  }
+  try { return { success: true, data: (await uploadImage(formData, "return-images")).fileId }; }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : "Gagal mengunggah gambar." }; }
 }
-
-async function updateLoanStatus(
-  loanId: string, 
-  status: LoanStatus, 
-  admin_note?: string, 
-  actual_return_date?: string, 
-  admin_image_id?: string,
-  extras?: object
-) {
-  const profile = await getCurrentUserProfile();
-  
-  const payload = {
-    status,
-    admin_id: profile?.user_id || null,
-    admin_note: admin_note || null,
-    ...(actual_return_date ? { actual_return_date } : {}),
-    ...(admin_image_id ? { admin_image_id } : {}),
-    ...extras
-  };
-
-  const supabase = await createAdminClient();
-  const { data, error } = await supabase
-    .from("loans")
-    .update(payload)
-    .eq("id", loanId)
-    .select()
-    .single();
-    
-  if (error) throw new Error(error.message);
-  return data;
-}
-
 export async function createLoanRequest(input: unknown): Promise<ActionResult> {
   try {
-    const values = loanRequestSchema.parse(input);
-    const profile = await getCurrentUserProfile();
-
-    if (!profile) {
-      return { success: false, error: "Sesi pengguna tidak ditemukan." };
-    }
-
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("loans")
-      .insert({
-        ...values,
-        borrower_id: profile.user_id,
-        status: "pending",
-        created_at: new Date().toISOString()
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, data };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Gagal membuat pengajuan pinjaman." };
-  }
+    const profile = await requireProfile();
+    const v = loanRequestSchema.parse(input);
+    if (new Date(v.borrow_date).getTime() < Date.now() - 300000 || new Date(v.return_date).getTime() < Date.now()) throw new Error("Tanggal peminjaman tidak boleh di masa lalu.");
+    const rows = await database()`
+      INSERT INTO loans (item_id, borrower_id, quantity, purpose, borrow_date, return_date)
+      SELECT id, ${profile.user_id}, ${v.quantity}, ${v.purpose}, ${v.borrow_date}::timestamptz, ${v.return_date}::timestamptz
+      FROM items WHERE id = ${v.item_id}::uuid AND is_available AND quantity_available >= ${v.quantity}
+      RETURNING *
+    `;
+    if (!rows.length) throw new Error("Barang tidak tersedia atau stok tidak cukup.");
+    return { success: true, data: rows[0] };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : "Gagal mengajukan pinjaman." }; }
 }
-
 export async function approveLoan(input: unknown): Promise<ActionResult> {
   try {
-    const values = loanDecisionSchema.parse(input);
-
-    const supabase = await createAdminClient();
-    
-    // Get loan
-    const { data: loan, error: loanError } = await supabase
-      .from("loans")
-      .select("*")
-      .eq("id", values.loanId)
-      .single();
-      
-    if (loanError || !loan) throw new Error(loanError?.message || "Loan not found");
-
-    // Get item
-    const { data: item, error: itemError } = await supabase
-      .from("items")
-      .select("*")
-      .eq("id", loan.item_id)
-      .single();
-      
-    if (itemError || !item) throw new Error(itemError?.message || "Item not found");
-
-    const nextAvailable = Number(item.quantity_available) - Number(loan.quantity);
-
-    if (nextAvailable < 0) {
-      return { success: false, error: "Stok tersedia tidak mencukupi." };
-    }
-
-    // Update item
-    await supabase
-      .from("items")
-      .update({ quantity_available: nextAvailable })
-      .eq("id", item.id);
-
-    const updatedLoan = await updateLoanStatus(values.loanId, "approved", values.admin_note, undefined, values.admin_image_id);
-    return { success: true, data: updatedLoan };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Gagal menyetujui pinjaman." };
-  }
+    const admin = await requireAdmin();
+    const v = loanDecisionSchema.parse(input);
+    // Lock the loan first. The conditional item update serializes stock changes.
+    // Both updates commit together, so a retry cannot decrement stock twice.
+    const rows = await database()`
+      WITH target AS (
+        SELECT * FROM loans WHERE id = ${v.loanId}::uuid AND status = 'pending'
+        AND (${v.admin_image_id || null}::text IS NULL OR EXISTS (
+          SELECT 1 FROM images WHERE id::text = ${v.admin_image_id || null} AND owner_id = ${admin.user_id} AND bucket = 'return-images'))
+        FOR UPDATE
+      ), stock AS (
+        UPDATE items i SET quantity_available = i.quantity_available - t.quantity
+        FROM target t WHERE i.id = t.item_id AND i.is_available AND i.quantity_available >= t.quantity
+        RETURNING i.id
+      )
+      UPDATE loans l SET status = 'approved', approved_at = now(), admin_id = ${admin.user_id},
+        admin_note = ${v.admin_note || null}, admin_image_id = ${v.admin_image_id || null}
+      FROM target t, stock s WHERE l.id = t.id AND t.item_id = s.id RETURNING l.*
+    `;
+    if (!rows.length) throw new Error("Pinjaman sudah diproses, stok tidak cukup, atau lampiran tidak valid.");
+    return { success: true, data: rows[0] };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : "Gagal menyetujui pinjaman." }; }
 }
-
 export async function rejectLoan(input: unknown): Promise<ActionResult> {
   try {
-    const values = loanDecisionSchema.parse(input);
-
-    const updatedLoan = await updateLoanStatus(values.loanId, "rejected", values.admin_note, undefined, values.admin_image_id);
-    return { success: true, data: updatedLoan };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Gagal menolak pinjaman." };
-  }
+    const admin = await requireAdmin();
+    const v = loanDecisionSchema.parse(input);
+    const rows = await database()`
+      UPDATE loans SET status = 'rejected', admin_id = ${admin.user_id}, admin_note = ${v.admin_note || null}
+      WHERE id = ${v.loanId}::uuid AND status = 'pending' RETURNING *
+    `;
+    if (!rows.length) throw new Error("Pinjaman tidak ditemukan atau sudah diproses.");
+    return { success: true, data: rows[0] };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : "Gagal menolak pinjaman." }; }
 }
-
-export async function markLoanReturned(input: unknown): Promise<ActionResult> {
-  try {
-    const values = returnLoanSchema.parse(input);
-
-    const supabase = await createAdminClient();
-    
-    // Get loan
-    const { data: loan } = await supabase
-      .from("loans")
-      .select("*")
-      .eq("id", values.loanId)
-      .single();
-      
-    // Get item
-    const { data: item } = await supabase
-      .from("items")
-      .select("*")
-      .eq("id", loan.item_id)
-      .single();
-
-    // Update item quantity
-    await supabase
-      .from("items")
-      .update({ quantity_available: Number(item.quantity_available) + Number(loan.quantity) })
-      .eq("id", item.id);
-
-    const updatedLoan = await updateLoanStatus(values.loanId, "returned", values.admin_note, values.actual_return_date);
-    return { success: true, data: updatedLoan };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Gagal mengonfirmasi pengembalian." };
-  }
-}
-
 export async function requestReturn(input: unknown): Promise<ActionResult> {
   try {
-    const values = requestReturnSchema.parse(input);
-
-    const updatedLoan = await updateLoanStatus(values.loanId, "returning", undefined, undefined, undefined, {
-      return_image_id: values.return_image_id,
-      user_note: values.user_note
-    });
-
-    return { success: true, data: updatedLoan };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Gagal mengajukan pengembalian." };
-  }
+    const profile = await requireProfile();
+    const v = requestReturnSchema.parse(input);
+    const rows = await database()`
+      UPDATE loans SET status = 'returning', return_requested_at = now(), return_image_id = ${v.return_image_id}, user_note = ${v.user_note || null}
+      WHERE id = ${v.loanId}::uuid AND borrower_id = ${profile.user_id} AND status IN ('borrowed','overdue','needs_review')
+        AND EXISTS (SELECT 1 FROM images WHERE id::text = ${v.return_image_id} AND owner_id = ${profile.user_id} AND bucket = 'return-images')
+      RETURNING *
+    `;
+    if (!rows.length) throw new Error("Pinjaman atau foto tidak valid, atau pengembalian sudah diajukan.");
+    return { success: true, data: rows[0] };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : "Gagal mengajukan pengembalian." }; }
 }
-
+export async function markLoanReturned(input: unknown): Promise<ActionResult> {
+  try {
+    const admin = await requireAdmin();
+    const v = returnLoanSchema.parse(input);
+    const rows = await database()`
+      WITH returned AS (
+        UPDATE loans SET status = 'returned', admin_id = ${admin.user_id},
+          admin_note = ${v.admin_note || null}, actual_return_date = ${v.actual_return_date}::timestamptz
+        WHERE id = ${v.loanId}::uuid AND status IN ('returning','needs_review') RETURNING *
+      ), stock AS (
+        UPDATE items i SET quantity_available = i.quantity_available + r.quantity
+        FROM returned r WHERE i.id = r.item_id RETURNING i.id
+      ) SELECT r.* FROM returned r JOIN stock s ON s.id = r.item_id
+    `;
+    if (!rows.length) throw new Error("Pinjaman tidak aktif atau pengembalian sudah dikonfirmasi.");
+    return { success: true, data: rows[0] };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : "Gagal mengonfirmasi pengembalian." }; }
+}
 export async function deleteLoan(loanId: string): Promise<ActionResult> {
   try {
-    const supabase = await createAdminClient();
-    const { error } = await supabase
-      .from("loans")
-      .delete()
-      .eq("id", loanId);
-
-    if (error) throw new Error(error.message);
-
+    await requireAdmin();
+    const rows = await database()`DELETE FROM loans WHERE id = ${loanId}::uuid AND status IN ('rejected','returned','cancelled') RETURNING id`;
+    if (!rows.length) throw new Error("Pinjaman aktif tidak dapat dihapus. Selesaikan pengembalian terlebih dahulu.");
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Gagal menghapus data pinjaman." };
-  }
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : "Gagal menghapus pinjaman." }; }
 }
-
 export async function deleteAllLoans(): Promise<ActionResult> {
   try {
-    const supabase = await createAdminClient();
-    
-    // Delete all loans without condition isn't supported directly safely in Postgrest unless explicitly allowed
-    // But we can delete where id is not null
-    const { error } = await supabase
-      .from("loans")
-      .delete()
-      .neq("id", "00000000-0000-0000-0000-000000000000"); // Just a dummy condition to match everything
-
-    if (error) throw new Error(error.message);
-
+    await requireAdmin();
+    // Only terminal records may be removed; active loans retain their stock link.
+    await database()`DELETE FROM loans WHERE status IN ('pending','rejected','returned')`;
     return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Gagal menghapus semua data pinjaman." };
-  }
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : "Gagal menghapus riwayat." }; }
 }

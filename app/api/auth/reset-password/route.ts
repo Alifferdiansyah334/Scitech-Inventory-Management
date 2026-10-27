@@ -7,7 +7,7 @@ export async function POST(req: Request) {
     const result = await resetPasswordWithOtp(body);
 
     if (!result.success) {
-      return NextResponse.json({ success: false, error: result.error }, { status: 400 });
+      return NextResponse.json({ success: false, error: result.error }, { status: result.status ?? 400 });
     }
 
     return NextResponse.json(result);

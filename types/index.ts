@@ -1,10 +1,11 @@
 export type UserRole = "admin" | "client";
-export type LoanStatus = "pending" | "approved" | "rejected" | "returned" | "overdue" | "returning";
+export type LoanStatus = "pending" | "approved" | "rejected" | "returned" | "overdue" | "returning" | "borrowed" | "cancelled" | "needs_review";
 
 export type ActionResult<T = unknown> = {
   success: boolean;
   data?: T;
   error?: string;
+  status?: number;
 };
 
 export type SessionCookie = {
@@ -22,6 +23,7 @@ export type Profile = {
   email: string;
   role: UserRole;
   department?: string;
+  phone?: string;
   avatar_url?: string;
   created_at: string;
   is_active?: boolean;
@@ -52,6 +54,7 @@ export type Loan = {
   status: LoanStatus;
   admin_id?: string;
   admin_note?: string;
+  admin_image_id?: string;
   return_image_id?: string;
   return_image_url?: string;
   user_note?: string;

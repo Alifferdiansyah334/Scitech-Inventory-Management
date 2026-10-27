@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
-import { getActiveLoans } from "@/lib/supabase/queries";
-
+import { getActiveLoans } from "@/lib/backend/queries";
+import { apiError } from "@/lib/backend/http";
 export async function GET() {
-  try {
-    const loans = await getActiveLoans();
-    return NextResponse.json(loans);
-  } catch (error) {
-    return NextResponse.json({ error: "Gagal mengambil data aktivitas" }, { status: 500 });
-  }
+  try { return NextResponse.json(await getActiveLoans()); } catch (error) { return apiError(error); }
 }

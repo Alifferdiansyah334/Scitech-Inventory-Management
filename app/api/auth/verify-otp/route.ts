@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { verifyBrevoOtp } from "@/lib/actions/otp";
+import { verifyManagedOtp } from "@/lib/actions/otp";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const result = await verifyBrevoOtp(body);
+    const result = await verifyManagedOtp(body);
 
     if (!result.success) {
-      return NextResponse.json({ success: false, error: result.error }, { status: 400 });
+      return NextResponse.json({ success: false, error: result.error }, { status: result.status ?? 400 });
     }
 
     return NextResponse.json(result);

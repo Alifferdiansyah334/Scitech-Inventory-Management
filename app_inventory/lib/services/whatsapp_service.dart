@@ -8,7 +8,7 @@ class WhatsAppService {
         .replaceAll(RegExp(r'[^0-9+]'), '')
         .replaceAll(RegExp(r'^[+]*'), '')
         .trim();
-    return digits.isEmpty ? '628123456789' : digits;
+    return digits.startsWith('0') ? '62${digits.substring(1)}' : digits;
   }
 
   static String _buildBorrowApprovalMessage({
@@ -33,6 +33,26 @@ Mohon menjaga kondisi barang dan mengembalikannya sesuai jadwal.
 
 Terima kasih.
 SIMS Scitech''';
+  }
+
+  static String _buildBorrowRequestMessage({
+    required String borrowerName,
+    required String itemName,
+    required int quantity,
+    required String purpose,
+    required DateTime borrowDate,
+    required DateTime dueDate,
+  }) {
+    return '''[SIMS - PENGAJUAN PINJAM BARANG]
+
+Halo Admin, saya $borrowerName ingin mengajukan peminjaman inventaris:
+
+📦 Barang: $itemName ($quantity unit)
+🎯 Keperluan: $purpose
+📅 Tanggal Pinjam: ${_formatDate(borrowDate)}
+📅 Estimasi Kembali: ${_formatDate(dueDate)}
+
+Mohon kesediaannya untuk meninjau dan menyetujui pengajuan ini di aplikasi SIMS. Terima kasih.''';
   }
 
   static String _buildReturnProofMessage({
@@ -82,6 +102,27 @@ Terima kasih.''';
     return _openWhatsApp(normalizedPhone, message);
   }
 
+  static Future<bool> sendBorrowRequestMessage({
+    required String phoneNumber,
+    required String borrowerName,
+    required String itemName,
+    required int quantity,
+    required String purpose,
+    required DateTime borrowDate,
+    required DateTime dueDate,
+  }) async {
+    final normalizedPhone = _normalizePhoneNumber(phoneNumber);
+    final message = _buildBorrowRequestMessage(
+      borrowerName: borrowerName,
+      itemName: itemName,
+      quantity: quantity,
+      purpose: purpose,
+      borrowDate: borrowDate,
+      dueDate: dueDate,
+    );
+    return _openWhatsApp(normalizedPhone, message);
+  }
+
   static Future<bool> sendReturnProofMessage({
     required String phoneNumber,
     required String borrowerName,
@@ -102,12 +143,22 @@ Terima kasih.''';
   }
 
   static Future<bool> _openWhatsApp(String phoneNumber, String message) async {
+    if (!RegExp(r'^\d{8,15}$').hasMatch(phoneNumber)) return false;
     final encoded = Uri.encodeComponent(message);
     final uri = Uri.parse('https://wa.me/$phoneNumber?text=$encoded');
-    final launched = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
     return launched;
+  }
+
+  static Uri? contactUri(String phone, String message) {
+    final normalized = _normalizePhoneNumber(phone);
+    if (!RegExp(r'^\d{8,15}$').hasMatch(normalized)) return null;
+    return Uri.https('wa.me', '/$normalized', {'text': message});
+  }
+
+  static Future<bool> contact(String phone, String message) async {
+    final uri = contactUri(phone, message);
+    if (uri == null) return false;
+    return launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }

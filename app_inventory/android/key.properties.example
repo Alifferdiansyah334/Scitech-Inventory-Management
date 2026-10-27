@@ -1,0 +1,5 @@
+# Copy privately to key.properties. Never commit key.properties or the keystore.
+storeFile=/absolute/private/path/sims-release.jks
+storePassword=REPLACE_PRIVATELY
+keyAlias=sims
+keyPassword=REPLACE_PRIVATELY

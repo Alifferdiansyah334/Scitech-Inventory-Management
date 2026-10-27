@@ -1,170 +1,111 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { checkOtp, requestOtp, sessionForOtpUser } from "@/lib/auth/otp";
+import { verifyOtpSchema } from "@/lib/validators/auth";
+import { database } from "@/lib/supabase/db";
+import { currentProfile, requireProfile, requireAdmin } from "@/lib/auth/session";
 import { loginSchema, registerSchema } from "@/lib/validators/auth";
 import { activeUserSchema, roleUpdateSchema } from "@/lib/validators/users";
-import type { ActionResult, Profile, SessionCookie } from "@/types";
+import { z } from "zod";
+import { enforceRateLimit } from "@/lib/auth/rate-limit";
+import { AuthFlowError } from "@/lib/auth/errors";
+import type { ActionResult, Profile } from "@/types";
 
 export async function registerUser(input: unknown): Promise<ActionResult<Profile>> {
   try {
     const values = registerSchema.parse(input);
-
-    const adminClient = await createAdminClient();
-    
-    // Gunakan Admin API untuk membuat user agar bisa langsung otomatis terverifikasi
-    // dan menghindari rate-limit bawaan dari halaman pendaftaran publik.
-    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
-      email: values.email,
-      password: values.password,
-      email_confirm: true, // Otomatis terkonfirmasi tanpa butuh email OTP
+    await enforceRateLimit("register", 5, 3600);
+    const admin = createAdminClient();
+    const { data, error } = await admin.auth.admin.createUser({
+      email: values.email.toLowerCase().trim(), password: values.password,
+      email_confirm: false, user_metadata: { full_name: values.full_name },
     });
-
-    if (authError || !authData.user) {
-      const errorMsg = authError?.message === "Email already exists" 
-        ? "Email sudah terdaftar. Silakan gunakan email lain atau login." 
-        : authError?.message || "Registrasi gagal di level autentikasi.";
-      return { success: false, error: errorMsg };
+    if (error || !data.user) return { success: false, error: "Pendaftaran belum berhasil. Jika email sudah terdaftar, gunakan login atau kirim ulang kode." };
+    const { data: profile, error: profileError } = await admin.from("profiles").upsert({
+      user_id: data.user.id, email: data.user.email, full_name: values.full_name,
+      department: values.department || "", phone: values.phone || "", role: "client", is_active: true,
+    }, { onConflict: "user_id" }).select().single();
+    if (profileError) throw new Error("Akun dibuat, tetapi profil belum tersedia. Hubungi admin.");
+    try {
+      await requestOtp(values.email, "register");
+    } catch {
+      return { success: false, status: 400, error: "Akun sudah dibuat, tetapi kode belum dapat dikirim. Kembali ke login OTP untuk meminta kode lagi." };
     }
-    const profilePayload = {
-      user_id: authData.user.id,
-      full_name: values.full_name,
-      email: values.email,
-      role: "client" as const,
-      department: values.department || "",
-      avatar_url: "",
-      created_at: new Date().toISOString()
-    };
-    
-    // Supabase will automatically insert if we use the admin client
-    // Or we could have trigger on auth.users in Supabase, but let's do it manually for explicit control.
-    const { data: profileData, error: profileError } = await adminClient
-      .from("profiles")
-      .insert(profilePayload)
-      .select()
-      .single();
-
-    if (profileError) {
-      // Rollback might be needed in a real app, but for now we return error
-      return { success: false, error: profileError.message };
-    }
-
-    // [MENGEMBALIKAN ALUR SEPERTI APPWRITE]
-    // Setelah akun dan profil terbuat via Admin, kita otomatis loginkan user tersebut
-    // agar mereka langsung punya sesi (session/cookies) dan tidak perlu login ulang.
-    const supabase = await createClient();
-    await supabase.auth.signInWithPassword({
-      email: values.email,
-      password: values.password,
-    });
-
-    return { success: true, data: profileData as Profile };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Registrasi gagal." };
-  }
+    return { success: true, data: profile as Profile };
+  } catch (error) { return { success: false, status: error instanceof AuthFlowError ? error.status : 400, error: error instanceof z.ZodError ? error.issues[0]?.message : error instanceof Error ? error.message : "Pendaftaran gagal." }; }
 }
-
 export async function loginUser(input: unknown): Promise<ActionResult<Profile>> {
   try {
     const values = loginSchema.parse(input);
-
-    const supabase = await createClient();
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: values.email,
-      password: values.password,
-    });
-
-    if (authError || !authData.user) {
-      return { success: false, error: authError?.message || "Login gagal." };
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", authData.user.id)
-      .single();
-
-    if (profileError || !profile) {
-      return { success: false, error: "Profil pengguna tidak ditemukan." };
-    }
-
-    return { success: true, data: profile as Profile };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Login gagal." };
-  }
+    await enforceRateLimit("password-login", 15, 600);
+    const client = await createClient();
+    const { error } = await client.auth.signInWithPassword(values);
+    if (error) return { success: false, error: "Email, kata sandi, atau verifikasi akun belum sesuai." };
+    const profile = await currentProfile();
+    if (!profile) { await client.auth.signOut(); return { success: false, error: "Akun tidak aktif atau belum diverifikasi." }; }
+    return { success: true, data: profile };
+  } catch { return { success: false, error: "Login belum dapat diproses." }; }
 }
-
-export async function logoutUser() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
-  redirect("/login");
+export async function loginWithOtp(input: unknown): Promise<ActionResult<Profile>> {
+  try {
+    const v = verifyOtpSchema.parse(input);
+    if (v.purpose === "forgot_password") throw new Error("Gunakan halaman pemulihan kata sandi.");
+    const userId = await checkOtp(v.email, v.purpose, v.otp, true);
+    const session = await sessionForOtpUser(userId);
+    const client = await createClient();
+    const { error } = await client.auth.setSession(session);
+    if (error) throw new Error("Sesi belum dapat disimpan.");
+    const profile = await currentProfile();
+    if (!profile) { await client.auth.signOut(); throw new Error("Akun tidak aktif."); }
+    return { success: true, data: profile };
+  } catch (error) { return { success: false, status: error instanceof AuthFlowError ? error.status : 400, error: error instanceof Error ? error.message : "Verifikasi gagal." }; }
 }
-
+export async function logoutUser() { const client = await createClient(); await client.auth.signOut(); redirect("/login"); }
 export async function updateUserRole(input: unknown): Promise<ActionResult> {
   try {
+    const admin = await requireAdmin();
     const values = roleUpdateSchema.parse(input);
-
-    const adminClient = await createAdminClient();
-    
-    const { error } = await adminClient
-      .from("profiles")
-      .update({ role: values.role })
-      .eq("user_id", values.userId);
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
+    if (values.userId === admin.user_id) throw new Error("Peran akun sendiri tidak dapat diubah.");
+    const rows = await database()`UPDATE profiles SET role = ${values.role} WHERE user_id = ${values.userId} RETURNING user_id`;
+    if (!rows.length) throw new Error("Pengguna tidak ditemukan.");
     return { success: true, data: values };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Gagal mengubah role." };
+    return { success: false, status: error instanceof AuthFlowError ? error.status : 400, error: error instanceof Error ? error.message : "Gagal mengubah peran." };
   }
 }
-
 export async function setUserActive(input: unknown): Promise<ActionResult> {
   try {
+    const admin = await requireAdmin();
     const values = activeUserSchema.parse(input);
-
-    const adminClient = await createAdminClient();
-    const { error } = await adminClient
-      .from("profiles")
-      .update({ is_active: values.isActive })
-      .eq("user_id", values.userId);
-      
-    if (error) {
-      return { success: false, error: error.message };
-    }
-    
+    if (values.userId === admin.user_id) throw new Error("Akun sendiri tidak dapat dinonaktifkan.");
+    const rows = await database()`UPDATE profiles SET is_active = ${values.isActive} WHERE user_id = ${values.userId} RETURNING user_id`;
+    if (!rows.length) throw new Error("Pengguna tidak ditemukan.");
     return { success: true, data: values };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Gagal mengubah status pengguna." };
+    return { success: false, status: error instanceof AuthFlowError ? error.status : 400, error: error instanceof Error ? error.message : "Gagal memperbarui pengguna." };
   }
 }
-
 export async function updateOwnProfile(input: Partial<Profile>): Promise<ActionResult<Profile>> {
   try {
-    const supabase = await createClient();
-    const { data: authData } = await supabase.auth.getUser();
-    
-    if (!authData.user) {
-      return { success: false, error: "Tidak dapat mengidentifikasi pengguna." };
-    }
-    
-    const { data, error } = await supabase
-      .from("profiles")
-      .update(input)
-      .eq("user_id", authData.user.id)
-      .select()
-      .single();
-      
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, data: data as Profile };
+    const profile = await requireProfile();
+    const values = z.object({
+      full_name: z.string().min(2).max(120).optional(),
+      department: z.string().max(120).optional(),
+      phone: z.string().regex(/^[+0-9 ()-]{0,30}$/, "Nomor telepon tidak valid.").optional(),
+      avatar_url: z.union([z.string().url().max(2000), z.literal("")]).optional()
+    }).strict().parse(input);
+    const rows = await database()`
+      UPDATE profiles SET full_name = ${values.full_name ?? profile.full_name},
+        department = ${values.department ?? profile.department ?? ""},
+        phone = ${values.phone ?? profile.phone ?? ""},
+        avatar_url = ${values.avatar_url ?? profile.avatar_url ?? ""}
+      WHERE user_id = ${profile.user_id} RETURNING *
+    `;
+    return { success: true, data: rows[0] as Profile };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Gagal memperbarui profil." };
+    return { success: false, status: error instanceof AuthFlowError ? error.status : 400, error: error instanceof Error ? error.message : "Gagal memperbarui profil." };
   }
 }
