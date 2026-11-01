@@ -2,14 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/app_state.dart';
 import '../core/password_policy.dart';
-import '../ui/springs.dart';
-import '../ui/tokens.dart';
-import 'auth/auth_entry.dart';
-import 'auth/auth_parts.dart';
-import 'auth/otp_input.dart';
+import 'app.dart';
 import 'password_strength.dart';
-
-part 'auth/auth_views.dart';
 
 class ConnectedAuthPage extends StatefulWidget {
   const ConnectedAuthPage({required this.state, super.key});
@@ -48,8 +42,6 @@ class _ConnectedAuthPageState extends State<ConnectedAuthPage> {
     }
     super.dispose();
   }
-
-  void update(VoidCallback change) => setState(change);
 
   void countdown() {
     timer?.cancel();
@@ -155,49 +147,33 @@ class _ConnectedAuthPageState extends State<ConnectedAuthPage> {
     }
   }
 
-  Future<void> resend() async {
-    setState(() => working = true);
-    try {
-      await widget.state.sendCode(email.text.trim(), purpose);
-      countdown();
-      notice = 'Kode baru telah diminta. Periksa email Anda.';
-    } catch (e) {
-      error = e.toString();
-    } finally {
-      if (mounted) setState(() => working = false);
-    }
-  }
-
   Widget field(
     TextEditingController controller,
     String label, {
-    String? hint,
-    IconData? icon,
-    String? helper,
     bool secret = false,
     bool optional = false,
-    TextInputType? keyboard,
+    bool numeric = false,
     int min = 1,
-  }) => AuthFieldLabel(
-    label: label,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
     child: TextFormField(
       controller: controller,
       enabled: !working,
       obscureText: secret && obscure,
-      keyboardType:
-          keyboard ??
-          (controller == email
-              ? TextInputType.emailAddress
-              : TextInputType.text),
+      readOnly: controller == email && const ['code', 'reset'].contains(mode),
+      keyboardType: numeric
+          ? TextInputType.number
+          : controller == email
+          ? TextInputType.emailAddress
+          : TextInputType.text,
       autofillHints: controller == email
           ? [AutofillHints.email]
           : secret
           ? [AutofillHints.password]
           : null,
+      maxLength: numeric ? 6 : null,
       decoration: InputDecoration(
-        hintText: hint,
-        helperText: helper,
-        prefixIcon: icon == null ? null : Icon(icon, size: 22),
+        labelText: label,
         suffixIcon: secret
             ? IconButton(
                 tooltip: obscure
@@ -225,43 +201,208 @@ class _ConnectedAuthPageState extends State<ConnectedAuthPage> {
             !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value!.trim())) {
           return 'Masukkan email yang valid.';
         }
+        if (numeric && !RegExp(r'^\d{6}$').hasMatch(value!)) {
+          return 'Masukkan 6 digit kode.';
+        }
         return null;
       },
     ),
   );
-
   @override
   Widget build(BuildContext context) {
-    final entry = mode == 'login' || mode == 'password';
-    final still = reducedMotion(context);
+    final title = {
+      'login': 'Masuk ke SIMS',
+      'password': 'Masuk dengan kata sandi',
+      'register': 'Buat akun peminjam',
+      'forgot': 'Pulihkan kata sandi',
+      'code': 'Verifikasi email',
+      'reset': 'Buat kata sandi baru',
+    }[mode]!;
     return Scaffold(
-      backgroundColor: entry ? AppColors.navy : AppColors.surface,
-      body: Form(
-        key: form,
-        child: AnimatedSwitcher(
-          duration: still ? Duration.zero : gentleCurve.duration,
-          reverseDuration: still
-              ? Duration.zero
-              : const Duration(milliseconds: 180),
-          switchInCurve: gentleCurve,
-          switchOutCurve: Curves.easeOut,
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween(
-                begin: const Offset(0, .03),
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Card(
+                color: Colors.white,
+                elevation: 0,
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Form(
+                    key: form,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Image.asset(
+                              'assets/images/Logo.png',
+                              width: 40,
+                              height: 40,
+                            ),
+                            const SizedBox(width: 12),
+                            const Text(
+                              'SIMS Scitech',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: navy,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 28),
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            color: navy,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Inventaris dan peminjaman internal Scitech.',
+                          style: TextStyle(color: Colors.blueGrey),
+                        ),
+                        const SizedBox(height: 24),
+                        if (error != null || widget.state.error != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Text(
+                              error ?? widget.state.error!,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        if (notice != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Text(
+                              notice!,
+                              style: const TextStyle(color: Color(0xFF087F72)),
+                            ),
+                          ),
+                        if (mode == 'register')
+                          field(name, 'Nama lengkap', min: 2),
+                        field(email, 'Alamat email'),
+                        if (mode == 'register') ...[
+                          field(department, 'Tim / divisi', optional: true),
+                          field(phone, 'Nomor telepon', optional: true),
+                        ],
+                        if (const [
+                          'register',
+                          'password',
+                          'reset',
+                        ].contains(mode))
+                          field(
+                            password,
+                            mode == 'reset' ? 'Kata sandi baru' : 'Kata sandi',
+                            secret: true,
+                            min: mode == 'password' ? 6 : 8,
+                          ),
+                        if (const ['register', 'reset'].contains(mode))
+                          PasswordStrength(controller: password),
+                        if (mode == 'reset')
+                          field(
+                            confirmation,
+                            'Konfirmasi kata sandi',
+                            secret: true,
+                            min: 8,
+                          ),
+                        if (mode == 'code')
+                          field(code, 'Kode OTP', numeric: true, min: 6),
+                        if (const ['login', 'password', 'code'].contains(mode))
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Ingat saya di perangkat ini'),
+                            value: remember,
+                            onChanged: working
+                                ? null
+                                : (value) =>
+                                      setState(() => remember = value ?? false),
+                          ),
+                        FilledButton(
+                          onPressed: working ? null : submit,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Text(
+                              working
+                                  ? 'Memproses...'
+                                  : {
+                                      'login': 'Kirim kode OTP',
+                                      'password': 'Masuk',
+                                      'register': 'Daftar dan verifikasi',
+                                      'forgot': 'Kirim kode pemulihan',
+                                      'code': 'Verifikasi',
+                                      'reset': 'Simpan kata sandi',
+                                    }[mode]!,
+                            ),
+                          ),
+                        ),
+                        if (mode == 'code')
+                          TextButton(
+                            onPressed: working || cooldown > 0
+                                ? null
+                                : () async {
+                                    setState(() => working = true);
+                                    try {
+                                      await widget.state.sendCode(
+                                        email.text.trim(),
+                                        purpose,
+                                      );
+                                      countdown();
+                                      notice =
+                                          'Kode baru telah diminta. Periksa email Anda.';
+                                    } catch (e) {
+                                      error = e.toString();
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() => working = false);
+                                      }
+                                    }
+                                  },
+                            child: Text(
+                              cooldown > 0
+                                  ? 'Kirim ulang dalam ${cooldown}s'
+                                  : 'Kirim ulang kode',
+                            ),
+                          ),
+                        if (mode == 'login') ...[
+                          TextButton(
+                            onPressed: working
+                                ? null
+                                : () => switchMode('password'),
+                            child: const Text('Masuk dengan kata sandi'),
+                          ),
+                          TextButton(
+                            onPressed: working
+                                ? null
+                                : () => switchMode('register'),
+                            child: const Text('Belum punya akun? Daftar'),
+                          ),
+                        ],
+                        if (mode == 'password')
+                          TextButton(
+                            onPressed: working
+                                ? null
+                                : () => switchMode('forgot'),
+                            child: const Text('Lupa kata sandi?'),
+                          ),
+                        if (mode != 'login')
+                          TextButton(
+                            onPressed: working
+                                ? null
+                                : () => switchMode('login'),
+                            child: const Text('Kembali ke login OTP'),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
-          layoutBuilder: (current, previous) => Stack(
-            fit: StackFit.expand,
-            children: [...previous, ?current],
-          ),
-          child: KeyedSubtree(
-            key: ValueKey(entry ? 'entry' : mode),
-            child: entry ? entryView() : stepView(),
           ),
         ),
       ),

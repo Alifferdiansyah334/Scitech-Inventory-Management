@@ -1,11 +1,11 @@
 {
-    "name": "SIMS Scitech",
-    "short_name": "SIMS",
+    "name": "app_inventory",
+    "short_name": "app_inventory",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0F2C59",
-    "theme_color": "#0F2C59",
-    "description": "Inventaris dan peminjaman barang internal Scitech.",
+    "background_color": "#0175C2",
+    "theme_color": "#0175C2",
+    "description": "A new Flutter project.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

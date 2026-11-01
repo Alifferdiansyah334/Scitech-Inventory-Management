@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/app_state.dart';
 import '../models.dart';
-import '../ui/tokens.dart';
 
 class ItemEditor extends StatefulWidget {
   const ItemEditor({required this.state, this.item, super.key});
@@ -69,47 +68,9 @@ class _ItemEditorState extends State<ItemEditor> {
     }
   }
 
-  Widget field(TextEditingController controller, String label) => Padding(
-    padding: const EdgeInsets.only(bottom: 14),
-    child: TextFormField(
-      controller: controller,
-      enabled: !saving,
-      maxLength: controller == description ? 2000 : 160,
-      minLines: controller == description ? 2 : 1,
-      maxLines: controller == description ? 4 : 1,
-      keyboardType: controller == total
-          ? TextInputType.number
-          : controller == description
-          ? TextInputType.multiline
-          : TextInputType.text,
-      decoration: InputDecoration(labelText: label, counterText: ''),
-      validator: (value) {
-        if (controller != description && (value?.trim().isEmpty ?? true)) {
-          return 'Kolom ini wajib diisi.';
-        }
-        if (controller == total &&
-            (int.tryParse(value!) == null || int.parse(value) < 0)) {
-          return 'Masukkan stok 0 atau lebih.';
-        }
-        return null;
-      },
-    ),
-  );
-
-  Future<void> pickPhoto() async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1600,
-      imageQuality: 75,
-    );
-    if (mounted && picked != null) setState(() => photo = picked);
-  }
-
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: Text(widget.item == null ? 'Tambah barang' : 'Ubah barang'),
-    contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-    actionsPadding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
     content: SizedBox(
       width: 460,
       child: SingleChildScrollView(
@@ -117,61 +78,74 @@ class _ItemEditorState extends State<ItemEditor> {
           key: form,
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (error != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 14),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.badSoft,
-                    borderRadius: BorderRadius.circular(AppRadii.control),
-                  ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
                   child: Text(
                     error!,
-                    style: const TextStyle(
-                      color: AppColors.bad,
-                      fontWeight: FontWeight.w600,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+              for (final pair in [
+                (name, 'Nama barang'),
+                (category, 'Kategori'),
+                (description, 'Deskripsi'),
+                (total, 'Stok total'),
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: TextFormField(
+                    controller: pair.$1,
+                    enabled: !saving,
+                    maxLength: pair.$1 == description ? 2000 : 160,
+                    keyboardType: pair.$1 == total
+                        ? TextInputType.number
+                        : TextInputType.text,
+                    decoration: InputDecoration(
+                      labelText: pair.$2,
+                      counterText: '',
                     ),
+                    validator: (value) {
+                      if (pair.$1 != description &&
+                          (value?.trim().isEmpty ?? true)) {
+                        return 'Kolom ini wajib diisi.';
+                      }
+                      if (pair.$1 == total &&
+                          (int.tryParse(value!) == null ||
+                              int.parse(value) < 0)) {
+                        return 'Masukkan stok 0 atau lebih.';
+                      }
+                      return null;
+                    },
                   ),
                 ),
-              field(name, 'Nama barang'),
-              field(category, 'Kategori'),
-              field(description, 'Deskripsi'),
-              field(total, 'Stok total'),
-              Material(
-                color: AppColors.paper,
-                borderRadius: BorderRadius.circular(AppRadii.control),
-                clipBehavior: Clip.antiAlias,
-                child: SwitchListTile(
-                  contentPadding: const EdgeInsets.fromLTRB(16, 0, 10, 0),
-                  title: const Text(
-                    'Dapat dipinjam',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  value: enabled,
-                  onChanged: saving
-                      ? null
-                      : (value) => setState(() => enabled = value),
-                ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Dapat dipinjam'),
+                value: enabled,
+                onChanged: saving
+                    ? null
+                    : (value) => setState(() => enabled = value),
               ),
-              const SizedBox(height: 12),
               OutlinedButton.icon(
-                onPressed: saving ? null : pickPhoto,
-                icon: Icon(
-                  photo == null
-                      ? Icons.add_photo_alternate_outlined
-                      : Icons.check_circle_outline_rounded,
-                ),
+                onPressed: saving
+                    ? null
+                    : () async {
+                        final picked = await ImagePicker().pickImage(
+                          source: ImageSource.gallery,
+                          maxWidth: 1600,
+                          imageQuality: 75,
+                        );
+                        if (mounted && picked != null) {
+                          setState(() => photo = picked);
+                        }
+                      },
+                icon: const Icon(Icons.add_photo_alternate_outlined),
                 label: Text(
                   photo == null
                       ? 'Pilih foto barang (maks. 2 MB)'
                       : photo!.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -180,7 +154,7 @@ class _ItemEditorState extends State<ItemEditor> {
       ),
     ),
     actions: [
-      OutlinedButton(
+      TextButton(
         onPressed: saving ? null : () => Navigator.pop(context),
         child: const Text('Batal'),
       ),

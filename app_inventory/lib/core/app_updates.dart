@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' hide appBuildNumber;
+import 'package:flutter/services.dart';
 import 'api.dart';
 import 'release_info.dart';
 import 'update_reload_stub.dart'

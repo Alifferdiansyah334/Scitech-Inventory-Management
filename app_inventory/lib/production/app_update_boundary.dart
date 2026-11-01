@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/api.dart';
 import '../core/app_updates.dart';
-import '../ui/tokens.dart';
 import 'app_update_page.dart';
 
 class AppUpdateBoundary extends StatefulWidget {
@@ -50,23 +49,23 @@ class _AppUpdateBoundaryState extends State<AppUpdateBoundary>
     builder: (context, _) => Column(
       children: [
         if (updates.available)
-          Material(
-            color: AppColors.navySoft,
-            child: SafeArea(
-              bottom: false,
+          SafeArea(
+            bottom: false,
+            child: Material(
+              color: const Color(0xFFEEF0FF),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
-                    const Icon(Icons.system_update, color: AppColors.navy),
+                    const Icon(Icons.system_update, color: Color(0xFF5546E8)),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         'SIMS ${updates.release!.version} tersedia.',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.navy,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                     TextButton(
@@ -82,13 +81,7 @@ class _AppUpdateBoundaryState extends State<AppUpdateBoundary>
               ),
             ),
           ),
-        Expanded(
-          child: MediaQuery.removePadding(
-            context: context,
-            removeTop: updates.available,
-            child: widget.child,
-          ),
-        ),
+        Expanded(child: widget.child),
       ],
     ),
   );
