@@ -2,6 +2,10 @@
 
 This branch contains the Flutter application, Next.js API, database schema and source tests. The previous standalone web interface is not included.
 
+## UI changes
+
+[UI change notes and before/after screenshots](app_inventory/docs/ui-redesign.md) cover the Flutter redesign against `316f664` on `SIMS-v1.0`, including mobile and desktop captures, local verification results, and sample-data limitations. Flutter setup and component details are in [the app README](app_inventory/README.md).
+
 ## API and Flutter
 
 Use Node.js 24. Run `npm ci`, configure `.env.local` using `.env.example`, then run `npm run dev`. Private Supabase and Brevo credentials stay on the server. Never put them in Flutter definitions or Git.

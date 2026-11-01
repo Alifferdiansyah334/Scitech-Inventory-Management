@@ -83,6 +83,48 @@ void main() {
       state.dispose();
     },
   );
+  testWidgets(
+    'Small-phone auth keeps login and recovery actions reachable with keyboard',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetViewInsets);
+      final api = ApiClient(
+        baseUrl: 'https://api.example.com',
+        client: MockClient((_) async => http.Response('{}', 401)),
+      );
+      final state = AppState(api: api, vault: MemoryVault());
+      await tester.pumpWidget(ConnectedScitechApp(state: state));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('Masuk dengan kata sandi'));
+      await tester.tap(find.text('Masuk dengan kata sandi'));
+      await tester.pumpAndSettle();
+      final passwordField = find.byType(TextFormField).last;
+      await tester.enterText(passwordField, 'LayoutCheck123!');
+      tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+      await tester.pumpAndSettle();
+      final submit = find.widgetWithText(FilledButton, 'Masuk');
+      await tester.ensureVisible(submit);
+      await tester.pumpAndSettle();
+      expect(submit.hitTestable(), findsOneWidget);
+      expect(tester.getBottomRight(submit).dy, lessThanOrEqualTo(360));
+      expect(tester.takeException(), isNull);
+      tester.view.resetViewInsets();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Lupa kata sandi?'));
+      await tester.tap(find.text('Lupa kata sandi?'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Kirim kode pemulihan').hitTestable(), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      api.close();
+      state.dispose();
+    },
+  );
   test(
     'Unavailable server is described without incorrectly blaming internet',
     () async {

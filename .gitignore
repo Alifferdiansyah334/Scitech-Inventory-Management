@@ -76,6 +76,16 @@ CHANGELOG.md
 *audit*.md
 *AUDIT*.md
 docs/
+
+# Shared UI change notes and screenshots; keep other local docs ignored.
+!/app_inventory/docs/
+/app_inventory/docs/*
+!/app_inventory/docs/ui-redesign.md
+!/app_inventory/docs/screenshots/
+/app_inventory/docs/screenshots/*
+!/app_inventory/docs/screenshots/ui-redesign/
+/app_inventory/docs/screenshots/ui-redesign/*
+!/app_inventory/docs/screenshots/ui-redesign/*.png
 supabase/.temp/
 scratch/
 *.backup
