@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'core/app_config.dart';
+import 'core/appearance.dart';
 import 'production/app.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(ConnectedScitechApp(state: AppConfig.instance.appState));
+  final appearance = await AppearanceController.load();
+  runApp(ConnectedScitechApp(state: AppConfig.instance.appState, appearance: appearance));
 }

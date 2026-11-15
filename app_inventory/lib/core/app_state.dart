@@ -23,9 +23,7 @@ class AppState extends ChangeNotifier {
     try {
       api.token = await vault.read();
       if (api.token != null) {
-        profile = Profile.fromJson(
-          (await api.request('api/mobile/auth/session'))['profile'] as Json,
-        );
+        profile = Profile.fromJson((await api.request('api/mobile/auth/session'))['profile'] as Json);
         await refresh();
       }
     } on ApiException catch (e) {
@@ -41,11 +39,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> authenticate(
-    Json data, {
-    bool register = false,
-    bool remember = true,
-  }) async {
+  Future<void> authenticate(Json data, {bool register = false, bool remember = true}) async {
     if (busy) return;
     busy = true;
     error = null;
@@ -60,9 +54,7 @@ class AppState extends ChangeNotifier {
               )
               as Json;
       if (result['verification_required'] == true) {
-        throw const ApiException(
-          'Periksa email dan masukkan kode verifikasi untuk melanjutkan.',
-        );
+        throw const ApiException('Periksa email dan masukkan kode verifikasi untuk melanjutkan.');
       }
       final token = result['token'] as String;
       if (remember) {
@@ -82,12 +74,7 @@ class AppState extends ChangeNotifier {
   Future<void> registerAccount(Json data) async {
     error = null;
     notifyListeners();
-    await api.request(
-      'api/mobile/auth/register',
-      method: 'POST',
-      data: data,
-      authenticated: false,
-    );
+    await api.request('api/mobile/auth/register', method: 'POST', data: data, authenticated: false);
   }
 
   Future<void> sendCode(String email, String purpose) async {
@@ -101,12 +88,7 @@ class AppState extends ChangeNotifier {
     );
   }
 
-  Future<void> authenticateOtp(
-    String email,
-    String code,
-    String purpose, {
-    bool remember = true,
-  }) async {
+  Future<void> authenticateOtp(String email, String code, String purpose, {bool remember = true}) async {
     if (busy) return;
     busy = true;
     error = null;
@@ -153,24 +135,16 @@ class AppState extends ChangeNotifier {
         if (!isAdmin) api.request('api/mobile/workspace'),
       ]);
       if (version != _generation) return;
-      items = (data[0] as List)
-          .map((j) => InventoryItem.fromJson(j as Json))
-          .toList();
+      items = (data[0] as List).map((j) => InventoryItem.fromJson(j as Json)).toList();
       loans = (data[1] as List).map((j) => Loan.fromJson(j as Json)).toList();
       if (isAdmin) {
-        procurements = (data[2] as List)
-            .map((j) => Procurement.fromJson(j as Json))
-            .toList();
-        users = (data[3] as List)
-            .map((j) => Profile.fromJson(j as Json))
-            .toList();
+        procurements = (data[2] as List).map((j) => Procurement.fromJson(j as Json)).toList();
+        users = (data[3] as List).map((j) => Profile.fromJson(j as Json)).toList();
       } else {
         procurements = [];
         users = [];
         final workspace = data[2] as Json;
-        activity = (workspace['activity'] as List)
-            .map((j) => TeamLoan.fromJson(j as Json))
-            .toList();
+        activity = (workspace['activity'] as List).map((j) => TeamLoan.fromJson(j as Json)).toList();
         adminContacts = (workspace['admin_contacts'] as List? ?? [])
             .map((j) => AdminContact.fromJson(j as Json))
             .toList();
@@ -192,11 +166,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<dynamic> mutate(
-    String path, {
-    String method = 'POST',
-    Json? data,
-  }) async {
+  Future<dynamic> mutate(String path, {String method = 'POST', Json? data}) async {
     if (busy) throw const ApiException('Tunggu proses sebelumnya selesai.');
     busy = true;
     notifyListeners();

@@ -1,12 +1,12 @@
 typedef Json = Map<String, dynamic>;
 
 class AdminContact {
-  const AdminContact({required this.id,required this.name,required this.phone});
-  final String id,name,phone;
+  const AdminContact({required this.id, required this.name, required this.phone});
+  final String id, name, phone;
   factory AdminContact.fromJson(Json j) {
-    final phone=j['phone'] as String;
-    if(!RegExp(r'^\d{8,15}$').hasMatch(phone))throw const FormatException('Kontak admin tidak valid.');
-    return AdminContact(id:j['id'] as String,name:j['name'] as String,phone:phone);
+    final phone = j['phone'] as String;
+    if (!RegExp(r'^\d{8,15}$').hasMatch(phone)) throw const FormatException('Kontak admin tidak valid.');
+    return AdminContact(id: j['id'] as String, name: j['name'] as String, phone: phone);
   }
 }
 
@@ -52,14 +52,8 @@ class Profile {
   final String id, name, email, role, department, phone;
   final bool active;
   bool get isAdmin => role == 'admin';
-  String get initials => name
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((s) => s.isNotEmpty)
-      .take(2)
-      .map((s) => s[0])
-      .join()
-      .toUpperCase();
+  String get initials =>
+      name.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).take(2).map((s) => s[0]).join().toUpperCase();
   factory Profile.fromJson(Json j) => Profile(
     id: j['user_id'] as String,
     name: j['full_name'] as String,
@@ -120,29 +114,14 @@ class Loan {
     this.beforeId,
     this.afterId,
   });
-  final String id,
-      itemId,
-      name,
-      status,
-      purpose,
-      borrower,
-      phone,
-      adminNote,
-      userNote,
-      issueNote;
+  final String id, itemId, name, status, purpose, borrower, phone, adminNote, userNote, issueNote;
   final String? beforeId, afterId;
   final int quantity;
   final DateTime borrowDate, dueDate;
-  bool get closed =>
-      const ['returned', 'rejected', 'cancelled'].contains(status);
-  bool get late =>
-      !closed &&
-      const ['borrowed', 'overdue'].contains(status) &&
-      dueDate.isBefore(DateTime.now());
-  bool get canReturn =>
-      const ['borrowed', 'overdue', 'needs_review'].contains(status);
-  String get label =>
-      late ? 'Terlambat' : statusLabels[status] ?? 'Status tidak dikenal';
+  bool get closed => const ['returned', 'rejected', 'cancelled'].contains(status);
+  bool get late => !closed && const ['borrowed', 'overdue'].contains(status) && dueDate.isBefore(DateTime.now());
+  bool get canReturn => const ['borrowed', 'overdue', 'needs_review'].contains(status);
+  String get label => late ? 'Terlambat' : statusLabels[status] ?? 'Status tidak dikenal';
   factory Loan.fromJson(Json j) => Loan(
     id: j['id'] as String,
     itemId: j['item_id'] as String,

@@ -1,0 +1,40 @@
+{
+  "brand": "SIMS",
+  "tagline": "Sistem Inventory Management Scitech",
+  "brief": "An internal mobile and web app where Scitech staff borrow and return equipment (cameras, drones, audio, projectors, tools) and admins manage stock, approvals and procurement. The mark must feel dependable and friendly, belong to the Scitech family without copying it, and work from a 16 px favicon to the launcher icon and splash screen.",
+  "adjectives": ["dependable", "friendly", "organised", "expressive-modern"],
+  "criteria": "Success: an endorsed Scitech sub-brand that is its own mark, readable at 16 px with the small cut, one-colour and reversed versions, at least 3:1 contrast, no inventory cliches (box, barcode, clipboard, magnifier).",
+  "mockups": ["app-icon", "favicon-tab", "sticker", "badge", "box", "signage"],
+  "nav": ["Beranda", "Inventaris", "Peminjaman"],
+  "brand_color": "#0F2C59",
+  "tile_color": "#0F2C59",
+  "greyscale": false,
+  "final": true,
+  "deck_title": "final identity",
+  "designer": "Scitech",
+  "concepts": [
+    {
+      "name": "Kit Case",
+      "symbol": "../sims-symbol.svg",
+      "lockup": "../sims-horizontal.svg",
+      "stacked": "../sims-stacked.svg",
+      "symbol_on_tile": "../sims-symbol-white.svg",
+      "stacked_on_tile": "../sims-stacked-white.svg",
+      "symbol_on_dark": "../sims-symbol-white.svg",
+      "lockup_on_dark": "../sims-horizontal-white.svg",
+      "stacked_on_dark": "../sims-stacked-white.svg",
+      "idea": "Scitech's prompt face on a carry case: the robot that keeps the kit.",
+      "rationale": [
+        "The >| prompt face and rounded window come straight from the Scitech lightbulb robot, so SIMS reads as family",
+        "A carry case names what the app does (equipment that goes out and comes back) without the box, barcode or clipboard cliches",
+        "Navy #0F2C59 case with a Kobalt #2E5BD0 prompt; one-colour, reversed (thinned) and a no-face small cut for 24 px and below"
+      ]
+    }
+  ],
+  "recommendation": "Use the full-colour symbol on light surfaces, the white symbol on navy (launcher, splash, app bar), and the small cut for 24 px and below. Keep the wordmark as outlined artwork; never retype it.",
+  "next_steps": [
+    "Wire the app: brand bar, splash and pubspec asset entries",
+    "Trademark search before external use",
+    "Print proof of navy and Kobalt (CMYK values are conversions, not proofed)"
+  ]
+}

@@ -1,10 +1,8 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' hide appBuildNumber;
 import 'api.dart';
 import 'release_info.dart';
-import 'update_reload_stub.dart'
-    if (dart.library.js_interop) 'update_reload_web.dart'
-    as web_update;
+import 'update_reload_stub.dart' if (dart.library.js_interop) 'update_reload_web.dart' as web_update;
 
 class AppRelease {
   const AppRelease({
@@ -24,10 +22,7 @@ class AppRelease {
     if (data['available'] != true) return null;
     final number = data['build_number'];
     final version = data['version'];
-    if (number is! int ||
-        number < 1 ||
-        version is! String ||
-        !RegExp(r'^\d+\.\d+\.\d+$').hasMatch(version)) {
+    if (number is! int || number < 1 || version is! String || !RegExp(r'^\d+\.\d+\.\d+$').hasMatch(version)) {
       throw const FormatException('Informasi pembaruan tidak valid.');
     }
     final notes = data['notes'] as String? ?? '';
@@ -42,9 +37,7 @@ class AppRelease {
     final size = data['size_bytes'];
     if (origin.scheme != 'https' ||
         file is! String ||
-        !RegExp(
-          r'^/releases/[A-Za-z0-9][A-Za-z0-9._+\-]*\.apk$',
-        ).hasMatch(file) ||
+        !RegExp(r'^/releases/[A-Za-z0-9][A-Za-z0-9._+\-]*\.apk$').hasMatch(file) ||
         hash is! String ||
         !RegExp(r'^[a-f0-9]{64}$').hasMatch(hash) ||
         size is! int ||
@@ -56,14 +49,7 @@ class AppRelease {
     if (url.origin != origin.origin) {
       throw const FormatException('Sumber pembaruan tidak diizinkan.');
     }
-    return AppRelease(
-      version: version,
-      buildNumber: number,
-      notes: notes,
-      url: url,
-      sha256: hash,
-      sizeBytes: size,
-    );
+    return AppRelease(version: version, buildNumber: number, notes: notes, url: url, sha256: hash, sizeBytes: size);
   }
 }
 
@@ -79,10 +65,8 @@ class AppUpdates extends ChangeNotifier {
   String installedVersion = appVersion;
   bool checking = false, downloading = false, downloaded = false;
   bool get isWeb => webOverride ?? kIsWeb;
-  bool get supported =>
-      isWeb || defaultTargetPlatform == TargetPlatform.android;
-  bool get available =>
-      release != null && release!.buildNumber > installedBuild;
+  bool get supported => isWeb || defaultTargetPlatform == TargetPlatform.android;
+  bool get available => release != null && release!.buildNumber > installedBuild;
   bool _disposed = false;
   void emit() {
     if (!_disposed) notifyListeners();
@@ -95,16 +79,12 @@ class AppUpdates extends ChangeNotifier {
     emit();
     try {
       if (!supported) {
-        throw const FormatException(
-          'Pembaruan ini tersedia untuk Android dan browser.',
-        );
+        throw const FormatException('Pembaruan ini tersedia untuk Android dan browser.');
       }
       if (currentBuildOverride != null) {
         installedBuild = currentBuildOverride!;
       } else if (!isWeb) {
-        final info = await channel.invokeMapMethod<String, dynamic>(
-          'installedRelease',
-        );
+        final info = await channel.invokeMapMethod<String, dynamic>('installedRelease');
         if (info == null) {
           throw const FormatException('Versi aplikasi belum dapat dibaca.');
         }
@@ -112,18 +92,13 @@ class AppUpdates extends ChangeNotifier {
         installedVersion = info['version'] as String;
       }
       final response =
-          await api.request(
-                'api/mobile/releases?platform=${isWeb ? 'web' : 'android'}',
-                authenticated: false,
-              )
+          await api.request('api/mobile/releases?platform=${isWeb ? 'web' : 'android'}', authenticated: false)
               as Map<String, dynamic>;
       final latest = AppRelease.parse(response, Uri.parse(api.baseUrl), isWeb);
       if (release?.buildNumber != latest?.buildNumber) downloaded = false;
       release = latest;
     } catch (e) {
-      error = e is PlatformException
-          ? 'Pembaruan belum dapat diperiksa. Coba kembali nanti.'
-          : e.toString();
+      error = e is PlatformException ? 'Pembaruan belum dapat diperiksa. Coba kembali nanti.' : e.toString();
     } finally {
       checking = false;
       emit();

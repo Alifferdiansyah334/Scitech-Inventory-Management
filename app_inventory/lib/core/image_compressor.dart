@@ -20,9 +20,7 @@ class ImageCompressor {
     try {
       return await compute(_isolateCompress, rawBytes);
     } catch (e) {
-      debugPrint(
-        'Isolate image compression error: $e. Fallback ke gambar asli.',
-      );
+      debugPrint('Isolate image compression error: $e. Fallback ke gambar asli.');
       return rawBytes;
     }
   }
@@ -35,19 +33,12 @@ class ImageCompressor {
 
       // 1. Resize proporsional jika dimensi terlalu besar (> 1024px)
       img.Image processed = decoded;
-      final maxDim = processed.width > processed.height
-          ? processed.width
-          : processed.height;
+      final maxDim = processed.width > processed.height ? processed.width : processed.height;
       if (maxDim > 1024) {
         final scale = 1024 / maxDim;
         final targetW = (processed.width * scale).round();
         final targetH = (processed.height * scale).round();
-        processed = img.copyResize(
-          processed,
-          width: targetW,
-          height: targetH,
-          interpolation: img.Interpolation.linear,
-        );
+        processed = img.copyResize(processed, width: targetW, height: targetH, interpolation: img.Interpolation.linear);
       }
 
       // 2. Progressive quality compression loop (80 -> 65 -> 50 -> 40 -> 30 -> 20)

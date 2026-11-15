@@ -1,9 +1,22 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../core/app_state.dart';
 import '../core/password_policy.dart';
-import 'app.dart';
+import '../ui/controls.dart';
+import '../ui/physics.dart';
+import '../ui/shapes.dart';
+import '../ui/theme.dart';
+import 'auth/auth_entry.dart';
+import 'auth/auth_hero.dart';
+import 'auth/auth_parts.dart';
+import 'auth/auth_stages.dart';
+import 'auth/otp_input.dart';
 import 'password_strength.dart';
+
+part 'auth/auth_views.dart';
+
+part 'auth/auth_views_steps.dart';
 
 class ConnectedAuthPage extends StatefulWidget {
   const ConnectedAuthPage({required this.state, super.key});
@@ -14,12 +27,9 @@ class ConnectedAuthPage extends StatefulWidget {
 
 class _ConnectedAuthPageState extends State<ConnectedAuthPage> {
   final form = GlobalKey<FormState>();
-  final email = TextEditingController(),
-      password = TextEditingController(),
-      name = TextEditingController();
-  final department = TextEditingController(),
-      phone = TextEditingController(),
-      code = TextEditingController();
+  final actionKey = GlobalKey();
+  final email = TextEditingController(), password = TextEditingController(), name = TextEditingController();
+  final phone = TextEditingController(), code = TextEditingController();
   final confirmation = TextEditingController();
   String mode = 'login', purpose = 'login';
   String? error, notice;
@@ -29,19 +39,13 @@ class _ConnectedAuthPageState extends State<ConnectedAuthPage> {
   @override
   void dispose() {
     timer?.cancel();
-    for (final c in [
-      email,
-      password,
-      name,
-      department,
-      phone,
-      code,
-      confirmation,
-    ]) {
+    for (final c in [email, password, name, phone, code, confirmation]) {
       c.dispose();
     }
     super.dispose();
   }
+
+  void update(VoidCallback change) => setState(change);
 
   void countdown() {
     timer?.cancel();
@@ -66,8 +70,28 @@ class _ConnectedAuthPageState extends State<ConnectedAuthPage> {
     password.clear();
     confirmation.clear();
   });
+
+  /// Success after a request: a firm tap and shapes thrown from the pill.
+  void celebrate() {
+    HapticFeedback.mediumImpact();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final origin = actionKey.currentContext;
+      if (!mounted || origin == null) return;
+      final scheme = context.colors;
+      ShapeBurst.show(
+        context,
+        origin: ShapeBurst.centerOf(origin),
+        colors: [scheme.primary, scheme.secondary, scheme.tertiary, context.palette.hero],
+      );
+    });
+  }
+
   Future<void> submit() async {
-    if (working || !form.currentState!.validate()) return;
+    if (working) return;
+    if (!form.currentState!.validate()) {
+      HapticFeedback.heavyImpact();
+      return;
+    }
     setState(() {
       working = true;
       error = null;
@@ -77,30 +101,26 @@ class _ConnectedAuthPageState extends State<ConnectedAuthPage> {
     try {
       switch (mode) {
         case 'login':
+          await widget.state.authenticate({'email': address, 'password': password.text}, remember: remember);
         case 'forgot':
-          purpose = mode == 'forgot' ? 'forgot_password' : 'login';
+          purpose = 'forgot_password';
           await widget.state.sendCode(address, purpose);
           mode = 'code';
           countdown();
-          notice =
-              'Jika akun tersedia, kode dikirim ke email Anda. Periksa juga folder spam.';
+          notice = 'Jika akun tersedia, kode dikirim ke email Anda. Periksa juga folder spam.';
+          celebrate();
         case 'register':
           await widget.state.registerAccount({
             'email': address,
             'password': password.text,
             'full_name': name.text.trim(),
-            'department': department.text.trim(),
             'phone': phone.text.trim(),
           });
           purpose = 'register';
           mode = 'code';
           countdown();
           notice = 'Masukkan kode dari email untuk mengaktifkan akun.';
-        case 'password':
-          await widget.state.authenticate({
-            'email': address,
-            'password': password.text,
-          }, remember: remember);
+          celebrate();
         case 'code':
           if (purpose == 'forgot_password') {
             await widget.state.api.request(
@@ -113,12 +133,7 @@ class _ConnectedAuthPageState extends State<ConnectedAuthPage> {
             password.clear();
             confirmation.clear();
           } else {
-            await widget.state.authenticateOtp(
-              address,
-              code.text,
-              purpose,
-              remember: remember,
-            );
+            await widget.state.authenticateOtp(address, code.text, purpose, remember: remember);
           }
         case 'reset':
           if (password.text != confirmation.text) {
@@ -135,277 +150,120 @@ class _ConnectedAuthPageState extends State<ConnectedAuthPage> {
               'confirmPassword': confirmation.text,
             },
           );
-          mode = 'password';
+          mode = 'login';
           password.clear();
           code.clear();
           notice = 'Kata sandi berhasil diubah. Silakan masuk.';
+          celebrate();
       }
     } catch (e) {
       error = e is FormatException ? e.message : e.toString();
+      HapticFeedback.heavyImpact();
     } finally {
       if (mounted) setState(() => working = false);
     }
   }
 
+  Future<void> resend() async {
+    if (working || cooldown > 0) return;
+    setState(() {
+      working = true;
+      error = null;
+      notice = null;
+    });
+    try {
+      await widget.state.sendCode(email.text.trim(), purpose);
+      countdown();
+      notice = 'Kode baru telah diminta. Periksa email Anda.';
+    } catch (e) {
+      error = e.toString();
+    } finally {
+      if (mounted) setState(() => working = false);
+    }
+  }
+
+  /// Compact auth field; [last] submits the step from the keyboard.
   Widget field(
     TextEditingController controller,
     String label, {
+    required IconData icon,
+    ExpressiveShape shape = ExpressiveShape.cookie9,
+    String? hint,
     bool secret = false,
     bool optional = false,
-    bool numeric = false,
+    bool last = false,
+    TextInputType? keyboard,
     int min = 1,
   }) => Padding(
-    padding: const EdgeInsets.only(bottom: 16),
-    child: TextFormField(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: ExpressiveTextField(
       controller: controller,
+      label: label,
+      icon: icon,
+      shape: shape,
+      hint: hint,
       enabled: !working,
       obscureText: secret && obscure,
-      readOnly: controller == email && const ['code', 'reset'].contains(mode),
-      keyboardType: numeric
-          ? TextInputType.number
-          : controller == email
-          ? TextInputType.emailAddress
-          : TextInputType.text,
+      capitalization: controller == name ? TextCapitalization.words : TextCapitalization.none,
+      textInputAction: last ? TextInputAction.done : TextInputAction.next,
+      onFieldSubmitted: last ? (_) => submit() : null,
+      keyboardType: keyboard ?? (controller == email ? TextInputType.emailAddress : TextInputType.text),
       autofillHints: controller == email
-          ? [AutofillHints.email]
+          ? const [AutofillHints.email]
           : secret
-          ? [AutofillHints.password]
+          ? [
+              const ['register', 'reset'].contains(mode) ? AutofillHints.newPassword : AutofillHints.password,
+            ]
+          : controller == name
+          ? const [AutofillHints.name]
+          : controller == phone
+          ? const [AutofillHints.telephoneNumber]
           : null,
-      maxLength: numeric ? 6 : null,
-      decoration: InputDecoration(
-        labelText: label,
-        suffixIcon: secret
-            ? IconButton(
-                tooltip: obscure
-                    ? 'Tampilkan kata sandi'
-                    : 'Sembunyikan kata sandi',
-                onPressed: () => setState(() => obscure = !obscure),
-                icon: Icon(
-                  obscure
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                ),
-              )
-            : null,
-      ),
+      trailing: secret
+          ? IconButton(
+              tooltip: obscure ? 'Tampilkan kata sandi' : 'Sembunyikan kata sandi',
+              isSelected: !obscure,
+              onPressed: working ? null : () => setState(() => obscure = !obscure),
+              icon: const Icon(Icons.visibility_outlined),
+              selectedIcon: const Icon(Icons.visibility_off_outlined),
+            )
+          : null,
       validator: (value) {
-        if (controller == password &&
-            const ['register', 'reset'].contains(mode)) {
+        if (controller == password && const ['register', 'reset'].contains(mode)) {
           return PasswordPolicy(value ?? '').error;
         }
-        if (optional && (value?.trim().isEmpty ?? true)) return null;
-        if ((value?.trim().length ?? 0) < min) {
-          return 'Isi minimal $min karakter.';
+        final text = value?.trim() ?? '';
+        if (optional && text.isEmpty) return null;
+        if (text.isEmpty) {
+          return controller == email ? 'Masukkan email kantor Anda.' : 'Wajib diisi.';
         }
-        if (controller == email &&
-            !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value!.trim())) {
+        if (text.length < min) return 'Isi minimal $min karakter.';
+        if (controller == email && !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value!.trim())) {
           return 'Masukkan email yang valid.';
-        }
-        if (numeric && !RegExp(r'^\d{6}$').hasMatch(value!)) {
-          return 'Masukkan 6 digit kode.';
         }
         return null;
       },
     ),
   );
+
+  /// Where system back goes from the current step; null on the sign-in
+  /// entry, which leaves the app.
+  String? get backTarget => switch (mode) {
+    'register' || 'forgot' => 'login',
+    'code' => purpose == 'forgot_password' ? 'forgot' : 'register',
+    'reset' => 'forgot',
+    _ => null,
+  };
+
   @override
-  Widget build(BuildContext context) {
-    final title = {
-      'login': 'Masuk ke SIMS',
-      'password': 'Masuk dengan kata sandi',
-      'register': 'Buat akun peminjam',
-      'forgot': 'Pulihkan kata sandi',
-      'code': 'Verifikasi email',
-      'reset': 'Buat kata sandi baru',
-    }[mode]!;
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Card(
-                color: Colors.white,
-                elevation: 0,
-                child: Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: Form(
-                    key: form,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            Image.asset(
-                              'assets/images/Logo.png',
-                              width: 40,
-                              height: 40,
-                            ),
-                            const SizedBox(width: 12),
-                            const Text(
-                              'SIMS Scitech',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                color: navy,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 28),
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                            color: navy,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Inventaris dan peminjaman internal Scitech.',
-                          style: TextStyle(color: Colors.blueGrey),
-                        ),
-                        const SizedBox(height: 24),
-                        if (error != null || widget.state.error != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: Text(
-                              error ?? widget.state.error!,
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                          ),
-                        if (notice != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: Text(
-                              notice!,
-                              style: const TextStyle(color: Color(0xFF087F72)),
-                            ),
-                          ),
-                        if (mode == 'register')
-                          field(name, 'Nama lengkap', min: 2),
-                        field(email, 'Alamat email'),
-                        if (mode == 'register') ...[
-                          field(department, 'Tim / divisi', optional: true),
-                          field(phone, 'Nomor telepon', optional: true),
-                        ],
-                        if (const [
-                          'register',
-                          'password',
-                          'reset',
-                        ].contains(mode))
-                          field(
-                            password,
-                            mode == 'reset' ? 'Kata sandi baru' : 'Kata sandi',
-                            secret: true,
-                            min: mode == 'password' ? 6 : 8,
-                          ),
-                        if (const ['register', 'reset'].contains(mode))
-                          PasswordStrength(controller: password),
-                        if (mode == 'reset')
-                          field(
-                            confirmation,
-                            'Konfirmasi kata sandi',
-                            secret: true,
-                            min: 8,
-                          ),
-                        if (mode == 'code')
-                          field(code, 'Kode OTP', numeric: true, min: 6),
-                        if (const ['login', 'password', 'code'].contains(mode))
-                          CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Ingat saya di perangkat ini'),
-                            value: remember,
-                            onChanged: working
-                                ? null
-                                : (value) =>
-                                      setState(() => remember = value ?? false),
-                          ),
-                        FilledButton(
-                          onPressed: working ? null : submit,
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Text(
-                              working
-                                  ? 'Memproses...'
-                                  : {
-                                      'login': 'Kirim kode OTP',
-                                      'password': 'Masuk',
-                                      'register': 'Daftar dan verifikasi',
-                                      'forgot': 'Kirim kode pemulihan',
-                                      'code': 'Verifikasi',
-                                      'reset': 'Simpan kata sandi',
-                                    }[mode]!,
-                            ),
-                          ),
-                        ),
-                        if (mode == 'code')
-                          TextButton(
-                            onPressed: working || cooldown > 0
-                                ? null
-                                : () async {
-                                    setState(() => working = true);
-                                    try {
-                                      await widget.state.sendCode(
-                                        email.text.trim(),
-                                        purpose,
-                                      );
-                                      countdown();
-                                      notice =
-                                          'Kode baru telah diminta. Periksa email Anda.';
-                                    } catch (e) {
-                                      error = e.toString();
-                                    } finally {
-                                      if (mounted) {
-                                        setState(() => working = false);
-                                      }
-                                    }
-                                  },
-                            child: Text(
-                              cooldown > 0
-                                  ? 'Kirim ulang dalam ${cooldown}s'
-                                  : 'Kirim ulang kode',
-                            ),
-                          ),
-                        if (mode == 'login') ...[
-                          TextButton(
-                            onPressed: working
-                                ? null
-                                : () => switchMode('password'),
-                            child: const Text('Masuk dengan kata sandi'),
-                          ),
-                          TextButton(
-                            onPressed: working
-                                ? null
-                                : () => switchMode('register'),
-                            child: const Text('Belum punya akun? Daftar'),
-                          ),
-                        ],
-                        if (mode == 'password')
-                          TextButton(
-                            onPressed: working
-                                ? null
-                                : () => switchMode('forgot'),
-                            child: const Text('Lupa kata sandi?'),
-                          ),
-                        if (mode != 'login')
-                          TextButton(
-                            onPressed: working
-                                ? null
-                                : () => switchMode('login'),
-                            child: const Text('Kembali ke login OTP'),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => PopScope(
+    canPop: backTarget == null,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop && !working && backTarget != null) switchMode(backTarget!);
+    },
+    child: Form(
+      key: form,
+      child: AuthFrame(step: currentStep()),
+    ),
+  );
 }

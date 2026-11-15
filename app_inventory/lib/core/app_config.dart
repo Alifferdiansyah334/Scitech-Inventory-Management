@@ -32,8 +32,7 @@ String resolveApiUrl() {
   if (configured.isNotEmpty) return configured;
   if (kIsWeb) {
     final uri = Uri.base;
-    if (!const ['localhost', '127.0.0.1'].contains(uri.host) ||
-        const [3000, 3001].contains(uri.port)) {
+    if (!const ['localhost', '127.0.0.1'].contains(uri.host) || const [3000, 3001].contains(uri.port)) {
       return uri.origin;
     }
   }

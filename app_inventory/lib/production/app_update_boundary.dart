@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/api.dart';
 import '../core/app_updates.dart';
+import '../ui/shapes.dart';
+import '../ui/theme.dart';
 import 'app_update_page.dart';
 
 class AppUpdateBoundary extends StatefulWidget {
@@ -11,8 +13,7 @@ class AppUpdateBoundary extends StatefulWidget {
   State<AppUpdateBoundary> createState() => _AppUpdateBoundaryState();
 }
 
-class _AppUpdateBoundaryState extends State<AppUpdateBoundary>
-    with WidgetsBindingObserver {
+class _AppUpdateBoundaryState extends State<AppUpdateBoundary> with WidgetsBindingObserver {
   late final AppUpdates updates = AppUpdates(widget.api);
   DateTime? checkedAt;
   @override
@@ -30,8 +31,7 @@ class _AppUpdateBoundaryState extends State<AppUpdateBoundary>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed &&
-        (checkedAt == null ||
-            DateTime.now().difference(checkedAt!).inMinutes >= 15)) {
+        (checkedAt == null || DateTime.now().difference(checkedAt!).inMinutes >= 15)) {
       check();
     }
   }
@@ -49,31 +49,34 @@ class _AppUpdateBoundaryState extends State<AppUpdateBoundary>
     builder: (context, _) => Column(
       children: [
         if (updates.available)
-          SafeArea(
-            bottom: false,
-            child: Material(
-              color: const Color(0xFFEEF0FF),
+          // Update notice in the AgroLens tonal style: a shape badge, the
+          // version and a text action.
+          Material(
+            color: context.colors.secondaryContainer,
+            child: SafeArea(
+              bottom: false,
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
                 child: Row(
                   children: [
-                    const Icon(Icons.system_update, color: Color(0xFF5546E8)),
-                    const SizedBox(width: 10),
+                    ShapeIcon(
+                      icon: Icons.system_update_rounded,
+                      shape: ExpressiveShape.sunny8,
+                      size: 36,
+                      fill: context.colors.primary,
+                      foreground: context.colors.onPrimary,
+                      iconScale: .5,
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'SIMS ${updates.release!.version} tersedia.',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: context.text.titleSmall?.copyWith(color: context.colors.onSecondaryContainer),
                       ),
                     ),
                     TextButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => AppUpdatePage(api: widget.api),
-                        ),
-                      ),
+                      onPressed: () =>
+                          Navigator.of(context).push(MaterialPageRoute(builder: (_) => AppUpdatePage(api: widget.api))),
                       child: const Text('Lihat pembaruan'),
                     ),
                   ],
@@ -81,7 +84,9 @@ class _AppUpdateBoundaryState extends State<AppUpdateBoundary>
               ),
             ),
           ),
-        Expanded(child: widget.child),
+        Expanded(
+          child: MediaQuery.removePadding(context: context, removeTop: updates.available, child: widget.child),
+        ),
       ],
     ),
   );

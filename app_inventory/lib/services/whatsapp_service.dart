@@ -4,10 +4,7 @@ class WhatsAppService {
   WhatsAppService._();
 
   static String _normalizePhoneNumber(String phoneNumber) {
-    final digits = phoneNumber
-        .replaceAll(RegExp(r'[^0-9+]'), '')
-        .replaceAll(RegExp(r'^[+]*'), '')
-        .trim();
+    final digits = phoneNumber.replaceAll(RegExp(r'[^0-9+]'), '').replaceAll(RegExp(r'^[+]*'), '').trim();
     return digits.startsWith('0') ? '62${digits.substring(1)}' : digits;
   }
 

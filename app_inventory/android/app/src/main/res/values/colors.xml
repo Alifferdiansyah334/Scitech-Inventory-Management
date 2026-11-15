@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand navy behind the native launch screen, matching the Flutter
+         splash so launch has no white flash. -->
+    <color name="splash_background">#0F2C59</color>
+</resources>
