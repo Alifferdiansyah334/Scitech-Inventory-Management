@@ -1,5 +1,12 @@
 # Catatan UI aplikasi Flutter
 
+## Dokumentasi dan screenshot terkini · 2026-11-15
+
+- Overview, tech stack, fitur, arsitektur, dan diagram alur terbaru ada di [README repository](../../README.md); panduan client di [README Flutter](../README.md).
+- `current-login-mobile.png`, `current-home-mobile.png`, `current-catalog-mobile.png`, dan `current-admin-desktop.png` pada `screenshots/ui-redesign/` diambil ulang dari build Flutter Web sumber V11.2 pada 15 November 2026. Mode gelap; viewport 390×844 dan 1440×1000. Preview memakai fixture lokal dengan identitas dan transaksi contoh, bukan layanan produksi.
+- Verifikasi sesi ini: `flutter test` **42 tes lulus**; `flutter build web --release --base-href=/ --no-web-resources-cdn` berhasil; layar masuk, Beranda, Katalog, dan Ringkasan admin diperiksa di Chromium. Build melaporkan peringatan font CupertinoIcons tidak tersedia; build tetap selesai.
+- Bagian V11.2 di bawah menjelaskan perilaku keyboard terkini. Bagian versi sebelumnya adalah riwayat, bukan spesifikasi aktif; beberapa screenshot historis hanya tersedia lokal. Berkas `after-*` yang sudah ada di Git berasal dari iterasi lama dan tidak dipakai sebagai screenshot UI terkini.
+
 ## V11.2 · koreksi field tertutup keyboard (2026-11-14)
 
 - Laporan pengguna: setelah V11.1, teks yang sedang diketik tidak terlihat. Menghapus fallback fokus tanpa mengganti sumber inset mengembalikan masalah pada Android lama yang hanya menyediakan visible insets.
